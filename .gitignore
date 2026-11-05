@@ -2,3 +2,6 @@
 /evals/runs/
 /.vscode/
 /.claude/
+/evals/source-verified/lsm-file-path/vmlinux.h
+/evals/source-verified/lsm-file-path/paths.bpf.o
+/evals/source-verified/lsm-file-path/load-test
