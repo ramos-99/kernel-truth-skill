@@ -32,10 +32,7 @@ The skill has to beat that one sentence, otherwise the sentence is the better to
 
 Each case has a prompt and an answer. `evals/maintainer-reviewed/` has the two real PR cases, with each answer split into what review confirmed and what I found in source with Claude's assistance. `evals/source-verified/` is for cases whose answers were only checked against source with Claude's assistance.
 
-The two rules I'm sticking to:
-
-- Answers get committed before the runs.
-- Some cases come from real commits in other projects, with prompts I write myself, because cases written by the same LLM that writes the skill flatter it. [SkillsBench](https://arxiv.org/abs/2602.12670) requires human-written instructions for the same reason.
+Some cases will come from real commits in other projects, with prompts I write myself, because cases written by the same LLM that writes the skill flatter it. [SkillsBench](https://arxiv.org/abs/2602.12670) requires human-written instructions for the same reason.
 
 Results get published even if the skill loses.
 
