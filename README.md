@@ -32,7 +32,7 @@ The skill has to beat that one sentence, otherwise the sentence is the better to
 
 Each case has a prompt and an answer. `evals/maintainer-reviewed/` has the two real PR cases, with each answer split into what review confirmed and what I found in source with Claude's assistance. `evals/source-verified/` is for cases whose answers were only checked against source with Claude's assistance.
 
-Some cases will come from real commits in other projects, with prompts I write myself, because cases written by the same LLM that writes the skill flatter it. [SkillsBench](https://arxiv.org/abs/2602.12670) requires human-written instructions for the same reason.
+New cases come from real PRs where a developer corrected a kernel claim and cited a reference, picked at random from a list, with prompts I write myself. I tried letting Claude pick cases, and `process-exit` showed why that's a bad idea: Sonnet got a working design from memory, probably because a topic that feels like a good question to one LLM is also well known to the other. [SkillsBench](https://arxiv.org/abs/2602.12670) requires human-written instructions for a related reason.
 
 Results get published even if the skill loses.
 
