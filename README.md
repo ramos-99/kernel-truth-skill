@@ -30,7 +30,7 @@ This is two tasks and a handful of runs, graded against source by Claude and not
 
 The skill has to beat that one sentence, otherwise the sentence is the better tool. [Vercel](https://vercel.com/blog/agents-md-outperforms-skills-in-our-agent-evals) found rules in `AGENTS.md` beating a skill that often didn't fire, so that's worth comparing too.
 
-Each case has a prompt and an answer. `evals/maintainer-reviewed/` has the two real PR cases, with each answer split into what review confirmed and what I found in source with Claude's assistance. `evals/source-verified/` is for cases whose answers were only checked against source with Claude's assistance.
+Each case has a prompt and an answer. `evals/maintainer-reviewed/` has the two real PR cases, with each answer split into what review confirmed and what I found in source with Claude's assistance. `evals/source-verified/` is for cases whose answers were only checked against source with Claude's assistance. `evals/pr-corrections/` is for cases drawn from real PR corrections, with answers tested on real kernels in VMs.
 
 New cases come from real PRs where a developer corrected a kernel claim and cited a reference, picked at random from a list, with prompts I write myself. I tried letting Claude pick cases, and `process-exit` showed why that's a bad idea: Sonnet got a working design from memory, probably because a topic that feels like a good question to one LLM is also well known to the other. [SkillsBench](https://arxiv.org/abs/2602.12670) requires human-written instructions for a related reason.
 
