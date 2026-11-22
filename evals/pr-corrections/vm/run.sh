@@ -2,6 +2,7 @@
 # Usage: ./run.sh <case-dir> <vmlinuz>
 # Boots the kernel in KVM with the case's guest.c as init. Needs /dev/kvm, not root.
 # Files in the directory named by VM_EXTRA get copied to the guest's root.
+# VM_QEMU_ARGS adds extra QEMU options, such as a network card.
 set -e
 
 case_dir=$(realpath "$1")
@@ -34,6 +35,6 @@ done
 (cd root && find . -print0 | cpio --null -H newc -o --quiet) > test.cpio
 
 timeout -k 5 120 qemu-system-x86_64 -enable-kvm -cpu host -smp 4 -m 1500M \
-	-nographic -no-reboot -kernel "$kernel" -initrd test.cpio \
+	-nographic -no-reboot $VM_QEMU_ARGS -kernel "$kernel" -initrd test.cpio \
 	-append 'console=ttyS0 rdinit=/init panic=-1 loglevel=3' </dev/null |
 	tr -d '\r' | sed -n '/=== KERNEL/,/=== DONE/p'
