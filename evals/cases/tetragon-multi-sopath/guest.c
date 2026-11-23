@@ -1,108 +1,67 @@
-// Starts tetragon with /policy.yaml, then runs /t/targets once per line of
-// /scenarios ("<expected exit> <mode>") and prints the exit codes.
+// Task storage across fork, exec and threads, and task->self_exec_id.
 #include "vm.h"
-#include <signal.h>
-#include <time.h>
+#include <pthread.h>
+#include <sys/syscall.h>
 
-static char tg_log[1 << 20];
+static const char *steps[] = {
+	"pid 1, first call", "pid 1, second call", "forked child", "forked child again",
+	"child after exec", "new thread",
+};
 
-static int log_has(const char *s)
+static void *thread(void *arg)
 {
-	int fd = open("/tmp/tg.log", O_RDONLY);
-	ssize_t n;
+	syscall(SYS_getppid);
+	return NULL;
+}
 
-	if (fd < 0)
+int main(int argc, char **argv)
+{
+	struct bpf_object *obj;
+	struct bpf_program *prog;
+	struct rec { __u32 tid, found, zeroed, pad; __u64 self_exec_id, stored_exec_id; } r;
+	pthread_t th;
+	pid_t pid;
+	int fd;
+
+	if (argc > 1) {
+		syscall(SYS_getppid);
 		return 0;
-	n = read(fd, tg_log, sizeof(tg_log) - 1);
-	close(fd);
-	tg_log[n > 0 ? n : 0] = 0;
-	return strstr(tg_log, s) != NULL;
-}
-
-static double now(void)
-{
-	struct timespec ts;
-
-	clock_gettime(CLOCK_MONOTONIC, &ts);
-	return ts.tv_sec + ts.tv_nsec / 1e9;
-}
-
-static int run_target(const char *mode)
-{
-	pid_t pid = fork();
-	double end = now() + 15;
-	int st;
-
-	if (pid == 0) {
-		execl("/t/targets", "/t/targets", mode, NULL);
-		_exit(253);
 	}
-	while (waitpid(pid, &st, WNOHANG) == 0) {
-		if (now() > end) {
-			kill(pid, SIGKILL);
-			waitpid(pid, &st, 0);
-			return -1;
-		}
-		usleep(10000);
-	}
-	return WIFEXITED(st) ? WEXITSTATUS(st) : 128 + WTERMSIG(st);
-}
-
-int main(void)
-{
-	char mode[64], line[128];
-	int want, got, loaded = 0, st;
-	double start;
-	FILE *f;
-	pid_t tg;
-
 	vm_init();
-	mount("bpf", "/sys/fs/bpf", "bpf", 0, NULL);
-	mount("cgroup2", "/sys/fs/cgroup", "cgroup2", 0, NULL);
-	mkdir("/tmp", 01777);
-	mkdir("/run", 0755);
+	obj = bpf_object__open_file("/test.bpf.o", NULL);
+	if (!obj || bpf_object__load(obj)) {
+		printf("load failed: %s", vm_lib_log);
+		vm_done();
+	}
+	prog = bpf_object__find_program_by_name(obj, "on_enter");
+	if (!bpf_program__attach(prog)) {
+		printf("attach failed\n");
+		vm_done();
+	}
 
-	tg = fork();
-	if (tg == 0) {
-		int fd = open("/tmp/tg.log", O_WRONLY | O_CREAT | O_TRUNC, 0644);
-
-		dup2(fd, 1);
-		dup2(fd, 2);
-		setenv("PATH", "/bin", 1);
-		execl("/tetragon", "/tetragon", "--bpf-lib", "/bpf/",
-		      "--tracing-policy", "/policy.yaml",
-		      "--server-address", "", "--health-server-address", "",
-		      "--export-filename", "/tmp/events.json", NULL);
+	syscall(SYS_getppid);
+	syscall(SYS_getppid);
+	pid = fork();
+	if (pid == 0) {
+		syscall(SYS_getppid);
+		syscall(SYS_getppid);
+		execl("/init", "/init", "exec", NULL);
 		_exit(1);
 	}
-	start = now();
-	while (now() - start < 80) {
-		if (log_has("Added TracingPolicy with success")) {
-			loaded = 1;
-			break;
-		}
-		if (waitpid(tg, &st, WNOHANG) == tg) {
-			tg = 0;
-			break;
-		}
-		usleep(200000);
-	}
-	printf("policy %s after %.0fs\n", loaded ? "loaded" : "NOT loaded", now() - start);
+	waitpid(pid, NULL, 0);
+	pthread_create(&th, NULL, thread, NULL);
+	pthread_join(th, NULL);
 
-	f = fopen("/scenarios", "r");
-	while (loaded && f && fscanf(f, "%d %63s", &want, mode) == 2) {
-		got = run_target(mode);
-		printf("%-10s exit %3d, want %3d  %s\n", mode, got, want, got == want ? "ok" : "FAIL");
+	fd = bpf_map__fd(bpf_object__find_map_by_name(obj, "out"));
+	printf("%-20s %5s %6s %7s %13s %15s\n", "step", "tid", "found", "zeroed", "self_exec_id", "stored_exec_id");
+	for (__u32 i = 0; i < sizeof(steps) / sizeof(steps[0]); i++) {
+		if (bpf_map_lookup_elem(fd, &i, &r) || !r.tid) {
+			printf("%-20s missing\n", steps[i]);
+			continue;
+		}
+		printf("%-20s %5u %6u %7u %13llu %15llu\n", steps[i], r.tid, r.found, r.zeroed,
+		       r.self_exec_id, r.stored_exec_id);
 	}
-
-	if (tg > 0) {
-		kill(tg, SIGTERM);
-		waitpid(tg, NULL, 0);
-	}
-	log_has("");
-	for (char *l = strtok(tg_log, "\n"); l; l = strtok(NULL, "\n"))
-		if (!loaded || strstr(l, "level=error"))
-			printf("  log: %.300s\n", l);
 	vm_done();
 	return 0;
 }

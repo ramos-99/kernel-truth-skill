@@ -32,8 +32,8 @@ The PR says `cpu.weight` is honored, measured on "Linux v7.2.2". At this commit 
 
 ## Grading
 
-Build with `cargo build --release -p scx_cidland`, stage with `evals/cases/scx-cidland-eevdf/stage.sh <binary> <dir>`, then run `VM_EXTRA=<dir> evals/vm/run.sh evals/cases/scx-cidland-eevdf <vmlinuz>` on Arch 7.2.9 (facts 10, 11). `VM_EXTRA` must be an absolute path.
-Check the output with `evals/cases/scx-cidland-eevdf/grade <output>`. It needs the scheduler loaded and still enabled after the spinner pairs (facts 11-13), nice 0 vs 6 between 2.5 and 8, nice 0 vs 19 above 30, nice 19 vs SCHED_IDLE above 2.5 (facts 2, 3) and spinner vs yielder above 20 (fact 7). It prints `cpu.weight` 400 vs 100 without grading it. Read the code for facts 1, 4 and 5.
+Build with `cargo build --release -p scx_cidland`, stage with `evals/cases/scx-cidland-eevdf/grade/stage.sh <binary> <dir>`, then run `VM_EXTRA=<dir> evals/vm/run.sh evals/cases/scx-cidland-eevdf <vmlinuz>` on Arch 7.2.9 (facts 10, 11). `VM_EXTRA` must be an absolute path.
+Check the output with `evals/cases/scx-cidland-eevdf/grade/check <output>`. It needs the scheduler loaded and still enabled after the spinner pairs (facts 11-13), nice 0 vs 6 between 2.5 and 8, nice 0 vs 19 above 30, nice 19 vs SCHED_IDLE above 2.5 (facts 2, 3) and spinner vs yielder above 20 (fact 7). It prints `cpu.weight` 400 vs 100 without grading it. Read the code for facts 1, 4 and 5.
 On Arch 7.2.9 the merged code passes every check and the parent fails the three weight checks. Merged gave 6.4 for nice 0 vs 6 against EEVDF's 3.75 over three runs. I didn't find out why, so the bounds are loose.
 
 ## Results

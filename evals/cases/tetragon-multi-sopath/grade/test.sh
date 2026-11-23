@@ -37,5 +37,5 @@ for p in "$@"; do
 	*) printf '1 1\n2 2\n3 3\n27 seq\n21 exec\n21 fork\n' ;;
 	esac > "$stage/scenarios"
 	echo "--- $p"
-	VM_EXTRA=$stage "$case_dir/../../vm/run.sh" "$case_dir" "$kernel"
+	VM_EXTRA=$stage "$case_dir/../../../vm/run.sh" "$case_dir" "$kernel"
 done

@@ -27,7 +27,7 @@ Run in a clone of KubeArmor at `ee4fbe28e132d4dcf9bdd5c320c93477e61aab8c`, the c
 
 ## Grading
 
-1. Build the objects with `evals/cases/kubearmor-lsm-audit/build-ka.sh <repo> <out>/ka worktree ee4fbe28` (needs clang and bpftool).
+1. Build the objects with `evals/cases/kubearmor-lsm-audit/grade/build-ka.sh <repo> <out>/ka worktree ee4fbe28` (needs clang and bpftool).
 2. Run `VM_EXTRA=<out> evals/cases/kubearmor-lsm-audit/run-lsm.sh evals/cases/kubearmor-lsm-audit <vmlinuz>` on at least v6.6, v6.12, v6.16 and v7.2. Nothing may be rejected that the parent loads on that kernel (facts 3, 5). With clang 23.1.5 the parent already fails 2/8 `enforcer` and 11/11 `enforcer_path` programs on v6.6 to v6.12, and none from v6.15. The fork check (fact 8) is extra credit, since the merged PR fails it on v6.16+.
 3. Run `evals/cases/kubearmor-lsm-audit/grade/run.sh <out>/ka/worktree-enforcer.bpf.o <vmlinuz> [audit-bit]`. With no rule, exec and open give `events=0`. Audit gives `events=1 retval=0` (event ids 352 and 450), and Block gives `Permission denied` with `events=1 retval=-13` (KubeArmor's `EPERM` is 13). The guest assumes the parent's map and event layouts and Audit as `1 << 10`, so adapt `grade/guest.c` if those changed.
 4. Read the diff for facts 2, 4, 6 and 7.
