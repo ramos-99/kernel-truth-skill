@@ -1,0 +1,21 @@
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: one-sopath
+spec:
+  uprobes:
+  - path: /t/targets
+    symbols:
+    - arg_target
+    args:
+    - index: 0
+      type: int
+    selectors:
+    - matchArgs:
+      - index: 0
+        operator: Equal
+        values: ["1"]
+      matchActions:
+      - action: Override
+        argNewSymbol: repl
+        sopath: /t/lib1.so

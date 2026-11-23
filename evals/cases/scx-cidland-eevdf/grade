@@ -1,0 +1,23 @@
+#!/bin/sh
+# Usage: ./grade <vm output>
+# Checks the scx_cidland workload ratios printed by guest.c.
+awk '
+/-- workloads under scx_cidland/ { on = 1; next }
+/^after workloads:/ { state = $4; on = 0 }
+on && /ratio/ { r[substr($0, 1, 28)] = $NF }
+function chk(name, lo, hi,   v) {
+	v = r[sprintf("%-28s", name)]
+	ok = v != "" && v >= lo && (hi == 0 || v <= hi)
+	printf "%-5s %-24s %8s  want %s..%s\n", ok ? "PASS" : "FAIL", name, v, lo, hi ? hi : "inf"
+	fail += !ok
+}
+END {
+	printf "%-5s %-24s %8s\n", state == "enabled," ? "PASS" : "FAIL", "still enabled", state
+	fail += state != "enabled,"
+	chk("nice 0 vs nice 6", 2.5, 8)
+	chk("nice 0 vs nice 19", 30, 0)
+	chk("nice 19 vs SCHED_IDLE", 2.5, 0)
+	chk("spinner vs yielder", 20, 0)
+	printf "info  %-24s %8s  EEVDF ~4\n", "cpu.weight 400 vs 100", r[sprintf("%-28s", "cpu.weight 400 vs 100")]
+	exit fail != 0
+}' "$1"

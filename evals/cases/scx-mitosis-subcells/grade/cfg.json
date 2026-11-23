@@ -1,0 +1,12 @@
+[
+  {
+    "name": "work",
+    "matches": { "CgroupContains": "workload.slice" },
+    "subcells": [
+      { "name": "a", "matches": [[{ "CommPrefix": "worker-a" }]] },
+      { "name": "b", "matches": [[{ "CommPrefix": "worker-b" }]] },
+      { "name": "rest", "matches": [[]] }
+    ]
+  },
+  { "name": "rest", "matches": {} }
+]

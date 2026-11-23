@@ -1,39 +1,57 @@
 # kernel-truth
 
-A Claude skill to stop coding agents writing wrong Linux kernel facts into code, docs and articles. Work in progress: the skill doesn't exist yet, only the test cases.
+A Claude skill to stop coding agents from writing wrong Linux kernel facts into code, docs and articles, plus the test cases used to measure it. The skill isn't written yet. The cases come first, so the skill can be judged against them.
 
-**I'm not a kernel expert.** Most of the answers here were found in source with Claude's assistance, and I can't independently confirm all of them. Each one cites where it came from, so if you find a mistake, please open an issue.
+**I'm not a kernel expert.** I can't confirm every answer here myself. Each fact cites the commit, file or test it rests on, and most were checked by booting real kernels in VMs. If you find a mistake, please open an issue.
+
+## Why
 
 It started with two of my aya PRs, written with an LLM's help, where review caught kernel facts the LLM got wrong:
 
-- [#1595](https://github.com/aya-rs/aya/pull/1595): it said `__sk_buff::tc_classid` is write-only for `sched_cls`. That was true before v4.6, so it's a stale fact rather than a made-up one. After the correction, an automated LLM reviewer [repeated the claim](https://github.com/aya-rs/aya/pull/1595#discussion_r3868162847). Review also caught that the docs ignored aya's default attach path on 6.6 and later.
-- [#1497](https://github.com/aya-rs/aya/pull/1497): a maintainer [pointed out](https://github.com/aya-rs/aya/pull/1497#issuecomment-4133043795) undefined behaviour from iproute2's pinning values, and that its pin paths don't match aya's.
+- [#1595](https://github.com/aya-rs/aya/pull/1595) said `__sk_buff::tc_classid` is write-only for `sched_cls`. That was true before v4.6, so it was a stale fact, not an invented one. After the correction, an automated LLM reviewer [repeated the claim](https://github.com/aya-rs/aya/pull/1595#discussion_r3868162847).
+- In [#1497](https://github.com/aya-rs/aya/pull/1497), a maintainer [pointed out](https://github.com/aya-rs/aya/pull/1497#issuecomment-4133043795) undefined behaviour from iproute2's pinning values, and that its pin paths don't match aya's.
 
-The kernel corrections on #1595 were themselves AI-drafted, in reviews signed as Codex on the maintainer's behalf, and the maintainer then approved the result. So this shows the errors reach review, not that only humans catch them.
+The corrections on #1595 were AI-drafted too, in reviews signed as Codex on the maintainer's behalf, which the maintainer then approved.
 
-## What I've seen so far
+## What I've found so far
 
-I ran Sonnet 5.5 on those two tasks by hand, without a skill. Without a hint, it read no kernel or iproute2 source in the runs I could check, and still wrote kernel behaviour into doc comments as fact. "tcx ignores `tc_classid`" came up in all three clean runs. Reading the source with Claude, that looks wrong, because `include/net/tcx.h` copies the value to `skb->tc_index`. No maintainer has confirmed this one: review only said tcx doesn't select a class.
+All runs are Sonnet 5.5 at medium effort, one fresh session per prompt, and each session log is checked to confirm it read nothing from this repo. Each case runs twice: once as is, and once with one added sentence: "Before writing any claim about kernel behaviour, check it against the Linux kernel source instead of relying on memory."
 
-Adding one sentence to the prompt, "check it against the Linux kernel source", fixed most of it. What was left needs more than reading the obvious file:
+| Case | As is | With the sentence |
+|---|---|---|
+| [find-vma](evals/cases/find-vma/case.md) | Code loses 7 of 8 stack frames in every sample | Correct, using a different helper |
+| [get-func-ip](evals/cases/get-func-ip/case.md) | One false claim about libbpf's probe, design still works | Correct |
+| [raw-tp-module](evals/cases/raw-tp-module/case.md) | Correct, from memory | Correct, with the exact version |
+| [perf-paranoid](evals/cases/perf-paranoid/case.md) | Right for current Ubuntu kernels, wrong for older ones | Right for older ones, wrong for current ones |
+| [softirq-latency](evals/cases/softirq-latency/case.md) | Correct, from memory | Correct |
 
-- It wrote "only consumed by `cls_bpf`" without searching for other users of the field.
-- It guessed the path `net/core/tcx.c`, got a 404, moved on, and still reported the behaviour as checked.
-- It read today's `bpf_elf.h` and parser, but never looked at the history, so no layout got tied to a version.
-- It mapped iproute2's global pinning to aya's by-name pinning without noticing they use different paths.
+From memory, Sonnet usually has the right idea and gets specific details wrong. How much that matters ranges from harmless to code that silently doesn't work. Told to check the source, it fixed most of it. The one clear miss with the sentence was `perf-paranoid`, where it read Ubuntu's real kernel source from a branch that doesn't match what Ubuntu ships.
 
-That's the skill: search the whole tree before saying "only" or "never", treat a failed lookup as unverified, read history when there are variants, and read both sides of a mapping.
+So the skill has to beat that one sentence, or the sentence is the better tool. [Vercel](https://vercel.com/blog/agents-md-outperforms-skills-in-our-agent-evals) found rules in `AGENTS.md` beating a skill that often didn't fire, so that comparison comes next too.
 
-This is two tasks and a handful of runs, graded against source by Claude and not blind, so it's a signal and not a measurement.
+These are single runs, graded by Claude and not blind, so they're early signals.
 
-## Testing it
+## The cases
 
-The skill has to beat that one sentence, otherwise the sentence is the better tool. [Vercel](https://vercel.com/blog/agents-md-outperforms-skills-in-our-agent-evals) found rules in `AGENTS.md` beating a skill that often didn't fire, so that's worth comparing too.
+Each case is a folder in [evals/cases/](evals/cases/) with a `case.md` (prompt, facts, grading, results) and the test code behind it.
 
-Each case has a prompt and an answer. `evals/maintainer-reviewed/` has the two real PR cases, with each answer split into what review confirmed and what I found in source with Claude's assistance. `evals/source-verified/` is for cases whose answers were only checked against source with Claude's assistance. `evals/pr-corrections/` is for cases drawn from real PR corrections, with answers tested on real kernels in VMs.
+- Two come from my aya PRs. Their answers are split into what maintainer review confirmed and what I found with Claude's help.
+- Five come from comments where a developer corrected a kernel claim in a real PR, drawn at random from a list.
+- Five are whole features from PRs merged since July 2026, so they're unlikely to be in the model's training data. Each depends on a chain of several kernel facts, and is graded by building and running what the model writes. These haven't been run yet.
+- Two were picked by Claude. They're kept apart, because a question Claude finds natural tends to be one the tested model already knows.
 
-New cases come from real PRs where a developer corrected a kernel claim and cited a reference, picked at random from a list, with prompts I write myself. I tried letting Claude pick cases, and `process-exit` showed why that's a bad idea: Sonnet got a working design from memory, probably because a topic that feels like a good question to one LLM is also well known to the other. [SkillsBench](https://arxiv.org/abs/2602.12670) requires human-written instructions for a related reason.
+How cases are chosen:
 
-Results get published even if the skill loses.
+1. The criteria are written down before searching.
+2. Every PR that passes goes on a list, which is frozen with a hash.
+3. The draw is random, seeded with the current Linux master commit.
+4. Each fact is checked in kernel source and, where possible, tested by booting real kernels in KVM, including Ubuntu's own builds when a distro patch matters.
+5. If a test disagrees with a maintainer, the case is dropped. If it disagrees with a PR's own description, that's noted in the case.
 
-Line numbers in `evals/` are for linux `f47d223627f8` and iproute2 `e11870d5b941`, unless a case says otherwise.
+[evals/vm/](evals/vm/) has the harness. `evals/vm/run.sh evals/cases/<name> <vmlinuz>` builds a case's test as a guest's init and boots it, without root on the host. `evals/vm/get-kernel.sh vX.Y` fetches Ubuntu's mainline builds.
+
+## How this was made
+
+I built this with Claude Code as a research assistant. Claude searched the PRs, read kernel source, wrote the VM tests and ran the test sessions. I set the direction and the method. Cases come from real PR reviews instead of Claude's own ideas, they're drawn at random, claims get tested in VMs before they count, and test runs are kept away from the answers. I also reviewed the results and pushed back on conclusions. Several of Claude's own conclusions turned out wrong along the way, caught by a test or by that review, and the case files record where. The prompts are drafted with Claude from each PR's description, and I review them.
+
+Line numbers in the older cases are for linux `f47d223627f8` and iproute2 `e11870d5b941`, unless a case says otherwise.
