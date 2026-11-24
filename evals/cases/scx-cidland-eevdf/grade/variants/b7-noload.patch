@@ -1,0 +1,12 @@
+ops.init fails: the scheduler never loads. Must be FAIL, not ENV.
+
+--- a/scheds/experimental/scx_cidland/src/bpf/main.bpf.c	2026-11-23 19:33:18.828777910 +0000
++++ b/scheds/experimental/scx_cidland/src/bpf/main.bpf.c	2026-11-23 19:33:18.828921149 +0000
+@@ -3354,6 +3354,7 @@
+ 
+ 	TOUCH_ARENA();
+ 
++	return -EINVAL;
+ 	if (!nr_cids_max) {
+ 		scx_bpf_error("cidland_arena_init() didn't run");
+ 		return -EINVAL;

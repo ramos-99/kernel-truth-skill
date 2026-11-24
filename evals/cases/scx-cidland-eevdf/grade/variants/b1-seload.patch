@@ -1,0 +1,21 @@
+Weight from p->se.load, which is stale for a sched_ext task (fact 3).
+
+--- a/scheds/experimental/scx_cidland/src/bpf/main.bpf.c	2026-11-23 19:33:18.816034529 +0000
++++ b/scheds/experimental/scx_cidland/src/bpf/main.bpf.c	2026-11-23 19:33:18.816698449 +0000
+@@ -1276,13 +1276,9 @@
+ 	u64 w;
+ 	u32 idx, cgw;
+ 
+-	if (p->policy == SCHED_IDLE) {
+-		w = WEIGHT_IDLEPRIO;
+-	} else {
+-		idx = p->static_prio - MAX_RT_PRIO;
+-		w = idx < ARRAY_SIZE(prio_to_weight) ?
+-			prio_to_weight[idx] : NICE_0_WEIGHT;
+-	}
++	w = p->se.load.weight >> 10;	/* scale_load_down() */
++	if (!w)
++		w = 1;
+ 
+ 	cgw = tctx ? tctx->cgw : 0;
+ 	if (!cgw || cgw == CGROUP_WEIGHT_DFL)

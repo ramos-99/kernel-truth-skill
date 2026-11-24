@@ -1,0 +1,12 @@
+diff --git a/scheds/experimental/scx_cidland/src/bpf/main.bpf.c b/scheds/experimental/scx_cidland/src/bpf/main.bpf.c
+index dcf59052..54cafad2 100644
+--- a/scheds/experimental/scx_cidland/src/bpf/main.bpf.c
++++ b/scheds/experimental/scx_cidland/src/bpf/main.bpf.c
+@@ -2152,6 +2152,7 @@ s32 BPF_STRUCT_OPS(cidland_select_cid, struct task_struct *p, s32 prev_cid, u64
+ 	 * affine target is not itself a selection; if it is busy, an idle
+ 	 * previous cid or an idle sibling still wins.
+ 	 */
++	return prev_cid;
+ 	target = wake_affine_cid(p, prev_cid, this_cid, wake_flags);
+ 
+ 	/*

@@ -1,0 +1,13 @@
+diff --git a/KubeArmor/BPF/enforcer.bpf.c b/KubeArmor/BPF/enforcer.bpf.c
+index 8017074..30333e4 100644
+--- a/KubeArmor/BPF/enforcer.bpf.c
++++ b/KubeArmor/BPF/enforcer.bpf.c
+@@ -878,7 +878,7 @@ decision:
+ 
+ ringbuf:
+ 
+-  if (retval == BLOCK)
++  if (retval == BLOCK || retval == AUDIT)
+   {
+     retval = -EPERM;
+   }

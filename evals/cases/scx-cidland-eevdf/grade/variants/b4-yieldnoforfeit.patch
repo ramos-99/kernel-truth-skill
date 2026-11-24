@@ -1,0 +1,20 @@
+ops.yield ends the slice but does not forfeit (vruntime = deadline, 7.2 yield_task_fair).
+
+--- a/scheds/experimental/scx_cidland/src/bpf/main.bpf.c	2026-11-23 19:33:18.823253389 +0000
++++ b/scheds/experimental/scx_cidland/src/bpf/main.bpf.c	2026-11-23 19:33:18.823430402 +0000
+@@ -2581,15 +2581,6 @@
+ 	if (time_after(tctx->vruntime, cid_vref_place(cid, now)))
+ 		return false;
+ 
+-	tctx->vruntime = tctx->deadline;
+-
+-	/*
+-	 * The jump is service as far as the pack is concerned, the way
+-	 * avg_vruntime() folds curr in at whatever vruntime it is carrying,
+-	 * and it is a consumed request as far as the deadline is concerned.
+-	 * Both are what this second settle-up is for.
+-	 */
+-	keep_charge(from, cid, now);
+ 
+ 	return false;
+ }

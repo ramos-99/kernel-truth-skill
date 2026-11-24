@@ -1,0 +1,22 @@
+diff -ru a/KubeArmor/BPF/enforcer.bpf.c b/KubeArmor/BPF/enforcer.bpf.c
+--- a/KubeArmor/BPF/enforcer.bpf.c
++++ b/KubeArmor/BPF/enforcer.bpf.c
+@@ -457,7 +457,6 @@
+   init_context(task_info);
+   bpf_probe_read_str(&task_info->data.path, MAX_STRING_SIZE, store->path);
+   bpf_probe_read_str(&task_info->data.source, MAX_STRING_SIZE, store->source);
+-  task_info->oid = oid;
+   task_info->event_id = _SECURITY_BPRM_CHECK;
+   task_info->retval = retval;
+   bpf_ringbuf_submit(task_info, 0);
+diff -ru a/KubeArmor/BPF/shared.h b/KubeArmor/BPF/shared.h
+--- a/KubeArmor/BPF/shared.h
++++ b/KubeArmor/BPF/shared.h
+@@ -1306,7 +1306,6 @@
+ 
+   bpf_probe_read_str(&task_info->data.path, MAX_STRING_SIZE, store->path);
+   bpf_probe_read_str(&task_info->data.source, MAX_STRING_SIZE, store->source);
+-  task_info->oid = oid;
+   task_info->event_id = eventID;
+   task_info->retval = retval;
+   bpf_ringbuf_submit(task_info, 0);

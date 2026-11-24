@@ -1,0 +1,25 @@
+bpftrace hangs on any iterator script on a supported kernel. Must be FAIL, not ENV (re-audit ENV check).
+
+diff --git a/src/ast/passes/iter_desugar.cpp b/src/ast/passes/iter_desugar.cpp
+index 5b4851a6..be280a75 100644
+--- a/src/ast/passes/iter_desugar.cpp
++++ b/src/ast/passes/iter_desugar.cpp
+@@ -4,6 +4,8 @@
+ #include <string>
+ #include <utility>
+ 
++#include <unistd.h>
++
+ #include "ast/ast.h"
+ #include "ast/visitor.h"
+ #include "bpf_iters.h"
+@@ -239,6 +241,9 @@ void IterDesugar::visit(Statement &stmt)
+     return;
+   }
+ 
++  for (;;)
++    pause();
++
+   if (bpftrace_.btf_->get_stype(info->yields).IsNoneTy()) {
+     it->addError() << "Cannot resolve \"" << info->yields << "\" required by "
+                    << it->func << "(); kernel BTF may be unavailable";

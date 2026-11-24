@@ -1,0 +1,13 @@
+--- a/bpf/process/uprobe_dyn.h
++++ b/bpf/process/uprobe_dyn.h
+@@ -404,8 +404,8 @@
+ 	if (!pending_c)
+ 		return false;
+ 
+-	idx = find_pending_idx(pending_c, -1);
+-	if (idx == -1)
++	idx = 0;
++	if (pending_c->stage[0] != STAGE_MMAP_PENDING && pending_c->stage[0] != STAGE_DLOPEN_PENDING)
+ 		return false;
+ 
+ 	// The pending slot only tells that a resolution is in progress on this thread.

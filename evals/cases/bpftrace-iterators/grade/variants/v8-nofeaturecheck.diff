@@ -1,0 +1,16 @@
+No has_kfunc check, so v6.6 only gets the loader's "Unknown kernel function" error. From the re-audit (w1).
+Kernels: v6.6
+
+diff --git a/src/ast/passes/iter_desugar.cpp b/src/ast/passes/iter_desugar.cpp
+index 5b4851a6..9bd19e7a 100644
+--- a/src/ast/passes/iter_desugar.cpp
++++ b/src/ast/passes/iter_desugar.cpp
+@@ -233,7 +233,7 @@ void IterDesugar::visit(Statement &stmt)
+     return;
+   }
+ 
+-  if (!bpftrace_.feature_->has_kfunc(info->kfunc + "_new")) {
++  if (false) {
+     it->addError() << "Missing required kernel feature: " << info->kfunc
+                    << " (open-coded iterators require kernel 6.7 or later)";
+     return;

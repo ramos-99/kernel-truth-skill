@@ -1,0 +1,42 @@
+diff --git a/KubeArmor/BPF/enforcer.bpf.c b/KubeArmor/BPF/enforcer.bpf.c
+index 80170740..0d39abf6 100644
+--- a/KubeArmor/BPF/enforcer.bpf.c
++++ b/KubeArmor/BPF/enforcer.bpf.c
+@@ -882,24 +882,16 @@ ringbuf:
+   {
+     retval = -EPERM;
+   }
+-  else
+-  {
+-    retval = 0;
+-  }
+ 
+   if (get_kubearmor_config(_ALERT_THROTTLING) && should_drop_alerts_per_container(okey))
+   {
+-    if (retval == -EPERM)
+-      return -EPERM;
+-    return 0;
++    return retval;
+   }
+ 
+   task_info = bpf_ringbuf_reserve(&kubearmor_events, sizeof(event), 0);
+   if (!task_info)
+   {
+-    if (retval == -EPERM)
+-      return -EPERM;
+-    return 0;
++    return retval;
+   }
+ 
+   // Clearing arrays to avoid garbage values to be parsed
+@@ -913,9 +905,7 @@ ringbuf:
+ 
+   task_info->retval = retval;
+   bpf_ringbuf_submit(task_info, 0);
+-  if (retval == -EPERM)
+-    return -EPERM;
+-  return 0;
++  return retval;
+ }
+ 
+ static inline int match_dns_rules(char *dns_name, u32 eventID)

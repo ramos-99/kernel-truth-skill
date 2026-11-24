@@ -1,0 +1,61 @@
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: too-many
+spec:
+  uprobes:
+  - path: /t/targets
+    symbols:
+    - arg_target
+    args:
+    - index: 0
+      type: int
+    selectors:
+    - matchArgs:
+      - index: 0
+        operator: Equal
+        values: ["1"]
+      matchActions:
+      - action: Override
+        argNewSymbol: repl
+        sopath: /t/lib1.so
+    - matchArgs:
+      - index: 0
+        operator: Equal
+        values: ["2"]
+      matchActions:
+      - action: Override
+        argNewSymbol: repl
+        sopath: /t/lib2.so
+    - matchArgs:
+      - index: 0
+        operator: Equal
+        values: ["4"]
+      matchActions:
+      - action: Override
+        argNewSymbol: repl
+        sopath: /t/lib1.so
+    - matchArgs:
+      - index: 0
+        operator: Equal
+        values: ["5"]
+      matchActions:
+      - action: Override
+        argNewSymbol: repl
+        sopath: /t/lib2.so
+    - matchArgs:
+      - index: 0
+        operator: Equal
+        values: ["6"]
+      matchActions:
+      - action: Override
+        argNewSymbol: repl
+        sopath: /t/lib1.so
+  - path: /t/targets
+    symbols:
+    - other_target
+    selectors:
+    - matchActions:
+      - action: Override
+        argNewSymbol: repl
+        sopath: /t/lib2.so

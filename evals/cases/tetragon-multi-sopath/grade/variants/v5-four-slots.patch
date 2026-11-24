@@ -1,0 +1,11 @@
+--- a/bpf/process/uprobe_dyn.h
++++ b/bpf/process/uprobe_dyn.h
+@@ -285,7 +285,7 @@
+ 	}
+ 	// Else, find a free slot
+ #pragma unroll
+-	for (int i = 0; i < MAX_SELECTORS; ++i) {
++	for (int i = 0; i < MAX_SELECTORS - 1; ++i) {
+ 		if (pending_c->stage[i] == STAGE_NONE)
+ 			return i;
+ 	}

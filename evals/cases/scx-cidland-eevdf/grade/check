@@ -1,23 +1,80 @@
 #!/bin/sh
-# Usage: ./grade <vm output>
-# Checks the scx_cidland workload ratios printed by guest.c.
+# Usage: check <vm output from grade/guest.c>
+# Grades the scx_cidland section. Last line is PASS, FAIL (with the failed
+# checks) or ENV; exit 0, 1 or 2. EEVDF and merged-PR numbers on Arch 7.2.9
+# are in the comments.
 awk '
-/-- workloads under scx_cidland/ { on = 1; next }
-/^after workloads:/ { state = $4; on = 0 }
-on && /ratio/ { r[substr($0, 1, 28)] = $NF }
-function chk(name, lo, hi,   v) {
-	v = r[sprintf("%-28s", name)]
-	ok = v != "" && v >= lo && (hi == 0 || v <= hi)
-	printf "%-5s %-24s %8s  want %s..%s\n", ok ? "PASS" : "FAIL", name, v, lo, hi ? hi : "inf"
-	fail += !ok
+/^=== KERNEL/ { kernel = $3 }
+/^cpus:/ { guest = 1 }
+/^loaded:/ { loaded = $2 }
+/^-- workloads under scx_cidland/ { on = 1; next }
+/^after workloads:/ { after = $3; on = 0 }
+on && /^(pair|runs|lat|wake) / {
+	name = substr($0, 6, index($0, "|") - 6); sub(/ +$/, "", name)
+	if ($1 == "lat") { v[name] = $(NF - 2); v[name " p90"] = $NF }
+	else v[name] = $NF
+	sub(/us$/, "", v[name]); sub(/us$/, "", v[name " p90"])
+}
+function chk(key, lo, hi, what,   x, ok) {
+	x = v[key]
+	ok = x != "" && x + 0 >= lo && (hi == "" || x + 0 <= hi)
+	printf "%-5s %-30s %9s  want %s..%s  (%s)\n", ok ? "ok" : "FAIL", key, x, lo, hi == "" ? "inf" : hi, what
+	if (!ok) failed = failed (failed ? ", " : "") key
 }
 END {
-	printf "%-5s %-24s %8s\n", state == "enabled," ? "PASS" : "FAIL", "still enabled", state
-	fail += state != "enabled,"
-	chk("nice 0 vs nice 6", 2.5, 8)
-	chk("nice 0 vs nice 19", 30, 0)
-	chk("nice 19 vs SCHED_IDLE", 2.5, 0)
-	chk("spinner vs yielder", 20, 0)
-	printf "info  %-24s %8s  EEVDF ~4\n", "cpu.weight 400 vs 100", r[sprintf("%-28s", "cpu.weight 400 vs 100")]
-	exit fail != 0
+	if (kernel != "7.2.9-arch1-1") {
+		print "ENV: kernel " (kernel ? kernel : "did not boot") ", need 7.2.9-arch1-1"
+		exit 2
+	}
+	# On the right kernel a scheduler that does not come up (verifier
+	# rejection, ops.init error, crash or panic while loading) is the
+	# fault of the implementation. ENV only if the guest never got that far.
+	if (!guest) {
+		print "ENV: guest did not start"
+		exit 2
+	}
+	if (loaded == "no") {
+		print "ENV: binary missing in the guest"
+		exit 2
+	}
+	if (loaded != "enabled") {
+		print "FAIL: scheduler did not load (state " (loaded ? loaded : "none, VM died while loading") "), read the log tail in the VM output"
+		exit 1
+	}
+	printf "%-5s %-30s %9s\n", after == "enabled" ? "ok" : "FAIL", "still enabled after workloads", after
+	if (after != "enabled") failed = "still enabled"
+	# weights. EEVDF 3.75, 62, 1.28, 1.20, 4.96; merged 6.5, 90-117, 1.44, 1.32, 8.8.
+	# nice 0/6 stops at 7.5: merged sits at 6.5, so it cannot go lower.
+	# Charging by p->scx.weight (cgroup scale) gives 1.00 for 17/18 and
+	# 19/IDLE and 2.95 for 18/19.
+	chk("nice 0 vs nice 6", 2.5, 7.5, "prio_to_weight")
+	chk("nice 0 vs nice 19", 40, 200, "prio_to_weight")
+	chk("nice 17 vs nice 18", 1.12, 1.8, "table, not cgroup scale")
+	chk("nice 18 vs nice 19", 1.08, 1.7, "table, not cgroup scale")
+	chk("nice 19 vs SCHED_IDLE", 2.5, "", "WEIGHT_IDLEPRIO")
+	# yield. EEVDF 379, merged 50-64, op without slice end 2.0.
+	chk("spinner vs yielder", 10, "", "sched_yield")
+	# lag across sleeps. Burst task: 1ms CPU then 50us sleep, beside a
+	# nice 5 spinner. Fair share gives 0.33. EEVDF 0.41, merged 0.30,
+	# dropping lag on wakeup 0.97, parent 1.98.
+	chk("spinner vs burst 1ms/50us", 0.75, 1.33, "lag")
+	chk("nice 5 vs burst 1ms/50us", 0.15, 0.6, "lag")
+	# sched_runtime. Involuntary switches/s of two spinners. EEVDF 483,
+	# 20, 72; merged 500, 13, 26; ignoring sched_runtime 500 for all.
+	chk("request 100ms", 0, 100, "sched_runtime")
+	chk("request 20ms", 0, 200, "sched_runtime")
+	# wakeup preemption. Wake latency (us) of a 1ms sleeper beside a hog.
+	# EEVDF 8, 8, 8 (p90 13 for the 20ms hog); merged 25; no wakeup
+	# preemption ~900 (waits for the hog slice to end at the tick).
+	chk("waker beside nice 0", 0, 300, "wakeup preemption")
+	# The SCHED_IDLE hog is always past its share here, so this is the
+	# ordinary eligibility path, not the idle-curr rule (see case.md).
+	chk("waker beside SCHED_IDLE", 0, 300, "wakeup preemption")
+	chk("waker beside 20ms request", 0, 300, "wakeup preemption")
+	chk("waker beside 20ms request p90", 0, 2000, "shorter request preempts")
+	# wakeup cpu selection: busy prev cpu, two idle ones. EEVDF and merged 1.00.
+	chk("busy prev, idle siblings", 0.9, 1, "select_idle_sibling")
+	if (failed) { print "FAIL: " failed; exit 1 }
+	print "PASS"
+	exit 0
 }' "$1"

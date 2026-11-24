@@ -1,0 +1,13 @@
+Want: PASS. Correct but different: exact r/w deadline without the MIN_DL_WEIGHT floor.
+
+--- a/scheds/experimental/scx_cidland/src/bpf/main.bpf.c	2026-11-23 19:33:18.836416540 +0000
++++ b/scheds/experimental/scx_cidland/src/bpf/main.bpf.c	2026-11-23 19:33:18.836658466 +0000
+@@ -1320,7 +1320,7 @@
+  * the lag can stretch is capped, which update_deadline() itself notes is
+  * "probably good enough".
+  */
+-#define MIN_DL_WEIGHT	(NICE_0_WEIGHT / 4)
++#define MIN_DL_WEIGHT	1
+ 
+ static u64 scale_by_dl_weight(const struct task_struct *p,
+ 			      const struct task_ctx *tctx, u64 value)

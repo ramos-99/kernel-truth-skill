@@ -1,0 +1,32 @@
+diff --git a/KubeArmor/BPF/shared.h b/KubeArmor/BPF/shared.h
+index f65d108c..f4fb0ec8 100644
+--- a/KubeArmor/BPF/shared.h
++++ b/KubeArmor/BPF/shared.h
+@@ -1289,15 +1289,11 @@ ringbuf:
+   {
+     retval = -EPERM;
+   }
+-  else
+-    retval = 0;
+   task_info = bpf_ringbuf_reserve(&kubearmor_events, sizeof(event), 0);
+   if (!task_info)
+   {
+     // Failed to reserve, doing policy enforcement without alert
+-    if (retval == -EPERM)
+-      return -EPERM;
+-    return 0;
++    return retval;
+   }
+   init_context(task_info);
+   // Clearing arrays to avoid garbage values
+@@ -1310,9 +1306,7 @@ ringbuf:
+   task_info->event_id = eventID;
+   task_info->retval = retval;
+   bpf_ringbuf_submit(task_info, 0);
+-  if (retval == -EPERM)
+-    return -EPERM;
+-  return 0;
++  return retval;
+ }
+ static inline bool matchArguments(unsigned int num_of_args, struct outer_key *okey, bufs_k *store, bufs_k *pk)
+ {

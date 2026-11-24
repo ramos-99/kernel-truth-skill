@@ -1,0 +1,13 @@
+diff --git a/scheds/experimental/scx_cidland/src/bpf/main.bpf.c b/scheds/experimental/scx_cidland/src/bpf/main.bpf.c
+index dcf59052..8210ab5d 100644
+--- a/scheds/experimental/scx_cidland/src/bpf/main.bpf.c
++++ b/scheds/experimental/scx_cidland/src/bpf/main.bpf.c
+@@ -1368,7 +1368,7 @@ static u64 lag_limit(const struct task_struct *p, const struct task_ctx *tctx)
+  */
+ static u64 task_request(const struct task_struct *p)
+ {
+-	return p->se.custom_slice ? p->se.slice : slice_ns;
++	return slice_ns;
+ }
+ 
+ /*

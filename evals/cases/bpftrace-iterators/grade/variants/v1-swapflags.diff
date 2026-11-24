@@ -1,0 +1,21 @@
+diff --git a/src/bpf_iters.cpp b/src/bpf_iters.cpp
+index 8e804dfb..538e2c2d 100644
+--- a/src/bpf_iters.cpp
++++ b/src/bpf_iters.cpp
+@@ -11,14 +11,14 @@ const std::vector<BpfIterItem> BPF_ITER_LIST = {
+     .yields = "struct task_struct",
+     .min_args = 0,
+     .max_args = 0,
+-    .flags = 0 },
++    .flags = 1 },
+   // BPF_TASK_ITER_ALL_THREADS
+   { .name = "iter_threads",
+     .kfunc = "bpf_iter_task",
+     .yields = "struct task_struct",
+     .min_args = 0,
+     .max_args = 0,
+-    .flags = 1 },
++    .flags = 0 },
+   // BPF_TASK_ITER_PROC_THREADS
+   { .name = "iter_task_threads",
+     .kfunc = "bpf_iter_task",

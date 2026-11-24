@@ -1,0 +1,12 @@
+diff -ru a/KubeArmor/BPF/shared.h b/KubeArmor/BPF/shared.h
+--- a/KubeArmor/BPF/shared.h
++++ b/KubeArmor/BPF/shared.h
+@@ -1219,7 +1219,7 @@
+       {
+         if (!is_owner_path(f_path->dentry, &oid))
+         {
+-          setRetval(val->filemask, &retval);
++          retval = BLOCK;
+ 
+           goto ringbuf;
+         }

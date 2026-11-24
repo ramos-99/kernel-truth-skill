@@ -1,0 +1,16 @@
+Not caught: drops 'SCHED_IDLE curr is preempted by any non-idle wakee'. Beside one SCHED_IDLE hog the
+merged code never sees the hog as owed service, so the ordinary path preempts anyway; with two SCHED_IDLE hogs,
+where EEVDF shows the rule (5us), the merged PR itself waits for the tick (899us). No workload separates it
+without failing the merged PR.
+
+--- a/scheds/experimental/scx_cidland/src/bpf/main.bpf.c	2026-11-23 19:33:18.818957522 +0000
++++ b/scheds/experimental/scx_cidland/src/bpf/main.bpf.c	2026-11-23 19:33:18.819108817 +0000
+@@ -2269,8 +2269,6 @@
+ 	 * away between them is any wakee that is not of a normal policy.
+ 	 */
+ 	p_idle = p->policy == SCHED_IDLE;
+-	if (cctx->curr_idle && !p_idle)
+-		goto preempt;
+ 	if (p_idle || p->policy == SCHED_BATCH)
+ 		goto idle;
+ 

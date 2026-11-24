@@ -1,7 +1,7 @@
 apiVersion: cilium.io/v1alpha1
 kind: TracingPolicy
 metadata:
-  name: one-sopath
+  name: nested
 spec:
   uprobes:
   - path: /t/targets
@@ -18,4 +18,12 @@ spec:
       matchActions:
       - action: Override
         argNewSymbol: repl
-        sopath: /t/lib1.so
+        sopath: /t/lib3.so
+  - path: /t/targets
+    symbols:
+    - other_target
+    selectors:
+    - matchActions:
+      - action: Override
+        argNewSymbol: repl
+        sopath: /t/lib2.so

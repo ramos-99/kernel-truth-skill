@@ -101,7 +101,7 @@ int main(void)
 	}
 	log_has("");
 	for (char *l = strtok(tg_log, "\n"); l; l = strtok(NULL, "\n"))
-		if (!loaded || strstr(l, "level=error"))
+		if (strstr(l, "level=error") || strstr(l, "level=fatal"))
 			printf("  log: %.300s\n", l);
 	vm_done();
 	return 0;

@@ -32,12 +32,28 @@ The PR says `cpu.weight` is honored, measured on "Linux v7.2.2". At this commit 
 
 ## Grading
 
-Build with `cargo build --release -p scx_cidland`, stage with `evals/cases/scx-cidland-eevdf/grade/stage.sh <binary> <dir>`, then run `VM_EXTRA=<dir> evals/vm/run.sh evals/cases/scx-cidland-eevdf <vmlinuz>` on Arch 7.2.9 (facts 10, 11). `VM_EXTRA` must be an absolute path.
-Check the output with `evals/cases/scx-cidland-eevdf/grade/check <output>`. It needs the scheduler loaded and still enabled after the spinner pairs (facts 11-13), nice 0 vs 6 between 2.5 and 8, nice 0 vs 19 above 30, nice 19 vs SCHED_IDLE above 2.5 (facts 2, 3) and spinner vs yielder above 20 (fact 7). It prints `cpu.weight` 400 vs 100 without grading it. Read the code for facts 1, 4 and 5.
-On Arch 7.2.9 the merged code passes every check and the parent fails the three weight checks. Merged gave 6.4 for nice 0 vs 6 against EEVDF's 3.75 over three runs. I didn't find out why, so the bounds are loose.
+Only Arch 7.2.9 (`evals/runs/kernels/host`) can load this scheduler. cid-form sched_ext starts in v7.2, Ubuntu's v7.2 BTF is too old (fact 11) and 7.3 changed `scx_bpf_cid_topo()` (fact 10). The grader says ENV on any other kernel.
+
+Build with `cargo build --release -j4 -p scx_cidland`. If the implementation needs command-line arguments, put them in `grade/adapter.sh` (the merged PR needs none). Then run `evals/cases/scx-cidland-eevdf/grade/run.sh target/release/scx_cidland`. It boots Arch 7.2.9 with `grade/guest.c`, starts the scheduler, runs tasks on CPU 1 and scores them with `grade/check`. The last line is PASS, FAIL or ENV (exit 0, 1 or 2). ENV is only for setup problems: wrong kernel, no binary, a VM that doesn't boot. A scheduler that never reaches `enabled` on Arch 7.2.9 (verifier rejection, init error, crash while loading) is FAIL, and the log tail in the output says why. With `EEVDF=1` the same workloads first run under the kernel's own scheduler, for reference.
+
+The checks (EEVDF and merged numbers are in `grade/check`):
+
+- The scheduler is still enabled after the workloads.
+- Weights (facts 2, 3), as CPU-time ratios: nice 0 vs 6 in 2.5..7.5 (EEVDF 3.75, merged 6.5), nice 0 vs 19 in 40..200, nice 17 vs 18 in 1.12..1.8, nice 18 vs 19 in 1.08..1.7, nice 19 vs SCHED_IDLE above 2.5. Charging by `p->scx.weight` passes the first two but gives 1.0, 2.9 and 1.0 on the rest.
+- Yield (fact 7): spinner vs yielder above 10.
+- Lag across sleeps: a task that runs 1ms of CPU and sleeps 50us next to a nice 5 spinner should get about its 3:1 share (ratio 0.15..0.6). Dropping lag at wakeup gives about 1. Turning off wakeup preemption fails this check too.
+- sched_runtime (fact 4): two spinners asking for 100ms or 20ms switch at most 100 or 200 times a second. The default request gives about 500.
+- Wakeup preemption: a task that sleeps 1ms next to a nice 0, SCHED_IDLE or 20ms-request hog gets the CPU back within 300us (median). Against the 20ms hog the 90th percentile must stay under 2ms. EEVDF takes 8us. Without preemption the task waits about 900us for the tick. The SCHED_IDLE hog is always past its share when the waker arrives, so this row goes through the ordinary eligibility path. It doesn't test the rule that an idle curr is preempted by any non-idle wakee.
+- Wakeup CPU selection: a task that wakes with its previous CPU busy and two idle CPUs lands on an idle one at least 90 times out of 100.
+
+`cpu.weight` is not graded on purpose. The merged PR doesn't honour it on 7.2 (fact 9: 400 vs 100 splits 1.00), so a check would fail the reference. For facts 1 and 5, read the code.
+
+`grade/selftest.sh <scx clone>` builds the merged PR (graded twice), the parent and the merged PR with each patch in `grade/variants/` applied. Merged has to pass, the parent and the wrong variants have to fail, and c4 and c5 (correct but different) have to pass. b2 (no idle-curr rule) is marked "Not caught" and passes. Beside one SCHED_IDLE hog the merged code never treats the hog as owed service, and with two hogs, where EEVDF does show the rule (5us), the merged PR itself waits 899us for the tick.
 
 ## Results
 
-Not run yet.
+The selftest is green on Arch 7.2.9. Merged passes twice, and the parent fails every weight, lag, sched_runtime and wakeup-latency check. v1 (`p->scx.weight`) fails nice 17/18, 18/19 and 19/IDLE. v2 (no lag) fails lag and the 20ms-hog p90 (19.8ms). v3 (no sched_runtime) fails both request checks. v4 (yield without ending the slice) fails yield. v5 (no wakeup preemption) fails lag and the latency checks. v6 (always the previous CPU) fails wakeup CPU selection. b1 (`se.load` weight) fails the weight checks, b3 (deadline scaled the wrong way) fails nice 5 vs burst, b4 (yield without forfeit) fails yield, b5 (lag sign) and b6 (kick without `SCX_KICK_PREEMPT`) fail lag and latency, and b7 (init error) is FAIL. c4 and c5 pass, and b2 passes as noted above.
 
-Not tested: `ops.yield` with an op in place beyond the end result, re-enqueue reasons, PELT, the watchdog, the jump-sequence limit, latency and wakeup preemption, load balancing, cpufreq, multi-CPU placement, and `cpu.weight` on 7.3 with a fixed `scx_bpf_cid_topo()` call.
+No model runs yet.
+
+Not tested: re-enqueue reasons, PELT, the watchdog, the jump-sequence limit, load balancing, cpufreq, `cpu.weight` on 7.3 with a fixed `scx_bpf_cid_topo()` call, and the SCHED_IDLE preemption rule separately from its weight (a waker beats a weight-3 hog either way).

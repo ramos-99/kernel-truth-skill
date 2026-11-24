@@ -1,0 +1,13 @@
+diff --git a/bpf/process/uprobe_dyn.h b/bpf/process/uprobe_dyn.h
+index 7ad74df51..6a9a529e8 100644
+--- a/bpf/process/uprobe_dyn.h
++++ b/bpf/process/uprobe_dyn.h
+@@ -171,7 +171,7 @@ FUNC_INLINE int call_mmap(struct pt_regs *ctx, struct task_struct *task, __u64 p
+ 	 * 2. A task has already a matched selector (addrs->self_exec_id !=0) but an exec
+ 	 *    happened so task->self_exec_id has been increased and differs.
+ 	 */
+-	if (pending_c->addrs.libc_exec_id != self_exec_id) {
++	if (pending_c->addrs.mmap == 0) {
+ 		base = find_library_base(task, libc);
+ 		if (base == 0) {
+ 			DEBUG_SO("no libc base addr for tid %ld!", pid_tgid);

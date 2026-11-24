@@ -1,0 +1,14 @@
+diff --git a/scheds/experimental/scx_cidland/src/bpf/main.bpf.c b/scheds/experimental/scx_cidland/src/bpf/main.bpf.c
+index dcf59052..929b3939 100644
+--- a/scheds/experimental/scx_cidland/src/bpf/main.bpf.c
++++ b/scheds/experimental/scx_cidland/src/bpf/main.bpf.c
+@@ -2256,8 +2256,7 @@ static void kick_queued_cid(s32 cid, const struct task_struct *p,
+ 	struct cid_ctx __arena *cctx;
+ 	bool owed, p_idle;
+ 
+-	if (no_wakeup_preempt || cid_idle_test(cid))
+-		goto idle;
++	goto idle;
+ 
+ 	cctx = cid_ctx(cid);
+ 

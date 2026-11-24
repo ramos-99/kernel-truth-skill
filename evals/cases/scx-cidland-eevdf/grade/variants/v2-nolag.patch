@@ -1,0 +1,13 @@
+diff --git a/scheds/experimental/scx_cidland/src/bpf/main.bpf.c b/scheds/experimental/scx_cidland/src/bpf/main.bpf.c
+index dcf59052..21b6081e 100644
+--- a/scheds/experimental/scx_cidland/src/bpf/main.bpf.c
++++ b/scheds/experimental/scx_cidland/src/bpf/main.bpf.c
+@@ -1994,8 +1994,6 @@ static void place_task(s32 cid, const struct task_struct *p,
+ 	if (!scx_bpf_task_running(p) && cid_valid(cid)) {
+ 		u64 vruntime = cid_vref_place(cid, now);
+ 
+-		if (cid_pack_weight(cid))
+-			vruntime -= tctx->vlag;
+ 		set_vruntime(tctx, vruntime, sleep);
+ 	}
+ 	vref_join(cid, p, tctx);

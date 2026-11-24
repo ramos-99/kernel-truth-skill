@@ -1,0 +1,161 @@
+#!/usr/bin/env python3
+# Usage: grade/check <vm output file>
+# Reads what grade/guest.c printed and decides PASS (exit 0), FAIL (1) or ENV (2).
+import re
+import sys
+
+# Kernels the grader is meant for, by major.minor. Everything else is ENV.
+#   6.6         no iterator kfuncs: every iterator script must fail with a feature-check error
+#   6.7 - 6.11  next() returns a pointer iter_task_vma() can't take (fact 5): nested_iter may fail
+#   6.17 - 6.19 verifier "no SCC" bug (fact 9): range_uncond_break may fail
+#   the rest    every script must pass
+KERNELS = {
+    (6, 6): "missing",
+    (6, 7): "old", (6, 11): "old",
+    (6, 12): "full", (6, 13): "full", (6, 15): "full", (6, 16): "full",
+    (6, 17): "scc", (6, 18): "scc", (6, 19): "scc",
+    (7, 0): "full", (7, 1): "full", (7, 2): "full", (7, 3): "full",
+}
+ALLOWED_FAIL = {"old": {"nested_iter"}, "scc": {"range_uncond_break"}}
+
+
+def verdict(word, detail="", code=0):
+    print(f"VERDICT: {word}" + (f" ({detail})" if detail else ""))
+    sys.exit(code)
+
+
+text = open(sys.argv[1], errors="replace").read()
+m = re.search(r"^=== KERNEL (\S+)", text, re.M)
+if not m:
+    verdict("ENV", "the VM printed nothing", 2)
+release = m.group(1)
+# Mainline builds (6.12.0-061200-generic) and Arch's, not distro kernels with backports.
+k = re.match(r"(\d+)\.(\d+)\.\d+-(\d{6}(rc\d+)?-generic|arch\d+-\d+)$", release)
+mode = KERNELS.get((int(k.group(1)), int(k.group(2)))) if k else None
+if not mode:
+    verdict("ENV", f"kernel {release} is not one this grader is meant for", 2)
+done = "=== DONE" in text
+
+m = re.search(r"^/proc: (\d+) processes, (\d+) threads, pid (\d+), extra threads (\d+)", text, re.M)
+if not m:
+    verdict("ENV", "the guest stopped before running anything", 2)
+P, T, PID, N = map(int, m.groups())
+
+runs = {}
+for block in re.split(r"^### ", text, flags=re.M)[1:]:
+    head, *rest = block.split("\n")
+    name, _, code = head.split()
+    runs[name] = (int(code), [l.strip() for l in rest if l.startswith("    ")])
+
+if runs.get("control", (127,))[0] == 127:
+    verdict("ENV", "bpftrace didn't start in the guest" if done else "the VM didn't finish", 2)
+# Past this point bpftrace started on a kernel the grader knows, and the guest
+# kills scripts that run too long. If the VM still didn't finish, the
+# implementation hung it; the scripts that never printed fail below.
+
+
+def has(lines, want):
+    return want in lines
+
+
+def nums(lines, pat):
+    for l in lines:
+        m = re.fullmatch(pat, l)
+        if m:
+            return [int(x) for x in m.groups()]
+    return None
+
+
+def c_prompt(e, l):
+    v = nums(l, r"(\d+)")
+    return e == 0 and v and v[0] > 1 and T - 1 <= v[0] <= T + 5
+
+
+def c_counts(e, l):
+    v = nums(l, r"procs (\d+) threads (\d+)")
+    # The walk also sees init_task and bpftrace, so +2 over /proc, with a bit of
+    # slack for kernel threads that come and go. The guest has N extra threads.
+    return (e == 0 and v and P - 1 <= v[0] <= P + 5 and T - 1 <= v[1] <= T + 5
+            and v[1] - v[0] >= N - 2)
+
+
+def c_task_threads(e, l):
+    v = nums(l, r"threads (\d+) me (\d+)")
+    return e == 0 and v and v[0] >= 1 and v[1] == 1
+
+
+def c_tp_task_threads(e, l):
+    return e == 0 and nums(l, r"threads (\d+) same (\d+)") == [N + 1, N + 1]
+
+
+def c_vma_addr(e, l):
+    v = nums(l, r"all (\d+) from_second (\d+) from_last (\d+)")
+    return e == 0 and v and v[0] > 2 and v[1] == v[0] - 1 and v[2] == 1
+
+
+def c_tp_vma(e, l):
+    return e == 0 and nums(l, r"ran (\d+)") is not None
+
+
+CHECKS = {
+    "control": lambda e, l: e == 0 and has(l, "3"),
+    "prompt": c_prompt,
+    "counts": c_counts,
+    "task_threads": c_task_threads,
+    "tp_task_threads": c_tp_task_threads,
+    "break": lambda e, l: e == 0 and has(l, "2"),
+    "continue": lambda e, l: e == 0 and has(l, "1"),
+    "return": lambda e, l: e == 0 and not has(l, "end"),
+    "map_write": lambda e, l: e == 0 and has(l, f"@[{PID}]: 1"),
+    "loop_local": lambda e, l: e == 0 and has(l, "ok"),
+    "vma": lambda e, l: e == 0 and has(l, "ok"),
+    "vma_addr": c_vma_addr,
+    "tp_vma_irqs_off": c_tp_vma,
+    "nested_iter": lambda e, l: e == 0 and has(l, "ok"),
+    "range_cond_break": lambda e, l: e == 0 and has(l, "2"),
+    "range_uncond_break": lambda e, l: e == 0 and has(l, "2"),
+}
+
+
+# An error that comes from a feature check: it names the kernel and says what
+# is missing or needed (iterators, 6.7, support). The loader's own complaint,
+# "Unknown kernel function: 'bpf_iter_task_new'; it is not present in kernel
+# BTF", matches none of those words, so an implementation without a check fails.
+FEATURE_WORDS = re.compile(r"\biterators?\b|\b6\.7\b|support|require|missing|minimum|too old", re.I)
+
+
+def c_missing(e, l):
+    # A normal error exit, not a crash or a timeout.
+    return 0 < e < 124 and any(
+        "kernel" in x.lower() and FEATURE_WORDS.search(x) and "Unknown kernel function" not in x
+        and not x.startswith("libbpf:") for x in l)
+
+
+print(f"kernel {release}: mode {mode}")
+if not done:
+    print("  the VM timed out after bpftrace started, so bpftrace hung")
+failed = []
+# Each script except control also runs as NAME:s0 with on_stack_limit = 0.
+names = [n for base in CHECKS for n in ([base] if base == "control" else [base, base + ":s0"])]
+for name in names:
+    base = name.split(":")[0]
+    check = CHECKS[base]
+    if name not in runs:
+        failed.append(name)
+        print(f"  {name:23} FAIL (no output)")
+        continue
+    e, l = runs[name]
+    if mode == "missing" and base != "control":
+        check = c_missing
+    ok = bool(check(e, l))
+    if not ok and base in ALLOWED_FAIL.get(mode, ()):
+        print(f"  {name:23} allowed to fail on this kernel (exit {e})")
+        continue
+    note = " (timed out)" if e == 124 else ""
+    print(f"  {name:23} {'ok' if ok else 'FAIL'}{note}")
+    if not ok:
+        failed.append(name)
+
+if failed:
+    verdict("FAIL", ", ".join(failed), 1)
+verdict("PASS")

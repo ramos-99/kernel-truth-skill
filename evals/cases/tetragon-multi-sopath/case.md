@@ -25,13 +25,20 @@ Line numbers are for v6.18. The fact tests are `guest.c` and `test.bpf.c` in thi
 
 ## Grading
 
-Run `evals/cases/tetragon-multi-sopath/grade/test.sh <tree> <vmlinuz> [policy...]` on a 6.18+ kernel (fact 1). It rebuilds Tetragon's BPF objects and agent, then boots one VM per policy with `grade/targets.c` and two libraries built from `grade/lib.c`. On a low-disk host, set `GOCACHE` to a tmpfs dir.
-`selectors.yaml` (multi-uprobe) and `selectors-nomulti.yaml` send arg 1 to lib1, 2 to lib2 and 3 to a symbol in the binary, over single calls and the `seq`, `exec` (facts 4-6) and `fork` (facts 3, 5) scenarios. `two-uprobes.yaml` alternates two uprobes on one thread (fact 7). A pass needs all three policies to load and every scenario to print `ok`.
-Also check that a policy with more than 5 `sopath` selectors is rejected. The PR's Go unit tests cover that, and the VM run doesn't.
-The merged tree passes on v6.18 and Arch 7.2.9 and refuses to load on v6.16. At the parent all three policies fail to load, and mutations M1, M2 and M3 each fail the scenario they target.
+Run `evals/cases/tetragon-multi-sopath/grade/test.sh <tree> <vmlinuz>` on v6.18 or v7.3; other kernels give ENV. It builds Tetragon's BPF objects and agent with the repo's own make targets (`-j4`, and a temporary `GOCACHE` unless you set one), then boots one VM per policy with `grade/targets.c` and three small libraries. lib2.so has a 4 KiB pad before `repl`, so a symbol offset taken from the wrong library doesn't work by luck. The policies use only the `sopath` API that existed before the PR, so there's no adapter to fill in.
+
+- `selectors.yaml` (multi-uprobe) and `selectors-nomulti.yaml` send arg 1 to lib1, 2 to lib2 and 3 to a symbol in the binary, over single calls, a mix on one thread, exec (facts 4-6) and fork (facts 3, 5).
+- `two-uprobes.yaml` alternates two uprobes on one thread (fact 7), then runs `race` 16 times: two threads of one process call `arg_target(1)` at once (fact 2). A crash or a wrong value fails. A call left un-overridden is allowed, because the merged PR does that too.
+- `five-ok.yaml` has exactly 5 `sopath` selectors and must load, and all five slots have to work on one thread.
+- `nested.yaml` overrides to `lib3.so`, whose constructor calls another overridden symbol while it's being loaded. Without a guard against starting a second resolution there, the target segfaults.
+- `too-many.yaml` is a multi-uprobe policy with 6 `sopath` selectors across two uprobes and must be rejected. The PR's limit is 5 per multi-uprobe policy, since all its uprobes share one program and one slot store. With uprobe-multi disabled it sets no limit across uprobes, and that isn't tested.
+
+The last line is `PASS`, `FAIL: <policy:problem ...>` or `ENV: <reason>`, with exit code 0, 1 or 2. `grade/selftest.sh <parent-tree> <merged-tree> <vmlinuz>` checks that the merged tree passes, and that the parent and each `grade/variants/*.patch` fail. v6-v8 came from the second audit: exec detected by PID, state in a map keyed by process ID instead of task storage, and the detour return recognised only for slot 0.
+
+On v6.18 the merged PR crashed in none of 80 `race` runs, and left 30 of their 320 calls un-overridden. The process-keyed variant crashed in 37 of 80, so 16 runs miss it with odds of about 1 in 20,000.
 
 ## Results
 
-Not run yet.
+No model runs yet. The grader passes the merged tree on v6.18 and fails the parent and all eight variants there. The version before `race` and the lib2 pad also passed the merged tree on v7.3; the current one hasn't been run on v7.3.
 
-Not tested: two threads of one process resolving at once (flaky at the parent too, 3/10 with one `sopath`, and 1/5 and 2/5 on the merged tree, so left out of the default scenarios), arm64, the library-constructor exec case from the review, the >5 limit in a VM, nested resolution, and kernels between v6.18 and 7.2.9.
+Not tested: whether two threads at once get every call overridden (the merged PR misses some, so `race` only checks for crashes and wrong values), arm64, the library-constructor exec case from the review, and kernels between v6.18 and 7.2.9.

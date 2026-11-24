@@ -1,0 +1,63 @@
+--- a/bpf/process/uprobe_dyn.h
++++ b/bpf/process/uprobe_dyn.h
+@@ -91,12 +91,26 @@
+ 
+ // Each thread has its own state machine to resolve the symbol address
+ struct {
+-	__uint(type, BPF_MAP_TYPE_TASK_STORAGE); // introduced in 5.11
+-	__uint(map_flags, BPF_F_NO_PREALLOC);
+-	__type(key, int); // thread-scoped
++	__uint(type, BPF_MAP_TYPE_HASH);
++	__uint(max_entries, 32768);
++	__type(key, __u32); // tgid: resolved symbols are shared by the whole process
+ 	__type(value, struct pending_call);
+ } tg_dyn_sm SEC(".maps");
+ 
++FUNC_INLINE struct pending_call *dyn_sm_get(int create)
++{
++	static const struct pending_call zero_pc = {};
++	__u32 tgid = get_current_pid_tgid() >> 32;
++	struct pending_call *pc;
++
++	pc = map_lookup_elem(&tg_dyn_sm, &tgid);
++	if (!pc && create) {
++		map_update_elem(&tg_dyn_sm, &tgid, &zero_pc, BPF_NOEXIST);
++		pc = map_lookup_elem(&tg_dyn_sm, &tgid);
++	}
++	return pc;
++}
++
+ FUNC_INLINE void skip_flow(struct pending_call *pending_c, __u64 pid_tgid, __u32 sym_id, __s32 idx)
+ {
+ 	pending_c->addrs.sym[idx] = 0;
+@@ -147,7 +161,7 @@
+ 	struct pending_call *pending_c;
+ 	__u64 base;
+ 
+-	pending_c = task_storage_get(&tg_dyn_sm, task, NULL, BPF_LOCAL_STORAGE_GET_F_CREATE);
++	pending_c = dyn_sm_get(1);
+ 	if (!pending_c) {
+ 		DEBUG_SO("failed to create task storage for tid %ld sym_id %d", pid_tgid, sym_id);
+ 		return 0; // failed to create task storage
+@@ -319,7 +333,7 @@
+ 	__s32 idx;
+ 
+ 	BPF_CORE_READ_INTO(&self_exec_id, task, self_exec_id);
+-	pending_c = task_storage_get(&tg_dyn_sm, task, NULL, 0);
++	pending_c = dyn_sm_get(0);
+ 	idx = find_avail_pending_c_idx(pending_c, sym_id);
+ 	if (idx == -1) {
+ 		// Should never happen, validated in userspace
+@@ -396,11 +410,10 @@
+ // would match, as the registers hold the values left by mmap() and dlopen().
+ FUNC_INLINE bool uprobe_dyn_pending(struct pt_regs *ctx, __u32 *sym_id)
+ {
+-	struct task_struct *task = (struct task_struct *)get_current_task_btf();
+ 	struct pending_call *pending_c;
+ 	__s32 idx;
+ 
+-	pending_c = task_storage_get(&tg_dyn_sm, task, NULL, 0);
++	pending_c = dyn_sm_get(0);
+ 	if (!pending_c)
+ 		return false;
+ 

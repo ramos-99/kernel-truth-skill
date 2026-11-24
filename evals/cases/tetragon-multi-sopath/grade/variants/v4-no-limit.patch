@@ -1,0 +1,13 @@
+diff --git a/pkg/sensors/tracing/dynamic_so.go b/pkg/sensors/tracing/dynamic_so.go
+index 1175b14ac..d20bda935 100644
+--- a/pkg/sensors/tracing/dynamic_so.go
++++ b/pkg/sensors/tracing/dynamic_so.go
+@@ -109,7 +109,7 @@ func ValidateSODynamicMultiUprobeConsistency(uprobes []v1alpha1.UProbeSpec) erro
+ 			}
+ 		}
+ 	}
+-	if numSoOverride > selectors.MaxSelectors {
++	if false && numSoOverride > selectors.MaxSelectors {
+ 		return fmt.Errorf("multi-uprobes mandate at most %d `sopath` selectors to be specified in the whole policy; found: %d", selectors.MaxSelectors, numSoOverride)
+ 	}
+ 	return nil

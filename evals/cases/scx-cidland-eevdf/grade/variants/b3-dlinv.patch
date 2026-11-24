@@ -1,0 +1,24 @@
+Deadline scaled by w/1024 instead of 1024/w.
+
+--- a/scheds/experimental/scx_cidland/src/bpf/main.bpf.c	2026-11-23 19:33:18.821129330 +0000
++++ b/scheds/experimental/scx_cidland/src/bpf/main.bpf.c	2026-11-23 19:33:18.821274955 +0000
+@@ -1458,7 +1458,7 @@
+ 		request /= 2;
+ 	}
+ 
+-	tctx->deadline = tctx->vruntime + scale_by_dl_weight(p, tctx, request);
++	tctx->deadline = tctx->vruntime + request * task_weight(p, tctx) / NICE_0_WEIGHT;
+ 
+ 	return tctx->deadline;
+ }
+@@ -1731,9 +1731,7 @@
+ 	 */
+ 	dl = cctx->curr_dl;
+ 	if (!dl || !time_before(v, dl)) {
+-		if (w < MIN_DL_WEIGHT)
+-			w = MIN_DL_WEIGHT;
+-		dl = v + cctx->curr_request * NICE_0_WEIGHT / w;
++		dl = v + cctx->curr_request * w / NICE_0_WEIGHT;
+ 	}
+ 
+ 	/* A tie is kept: giving the CPU up costs a switch. */

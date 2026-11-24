@@ -1,0 +1,16 @@
+Want: PASS. Correct but different: no direct dispatch from ops.select_cid, always queue.
+
+--- a/scheds/experimental/scx_cidland/src/bpf/main.bpf.c	2026-11-23 19:33:18.838781583 +0000
++++ b/scheds/experimental/scx_cidland/src/bpf/main.bpf.c	2026-11-23 19:33:18.838960881 +0000
+@@ -2159,10 +2159,8 @@
+ 	 * without bouncing it through ops.enqueue().
+ 	 */
+ 	cid = select_idle_sibling_cid(p, prev_cid, target);
+-	if (cid >= 0) {
+-		direct_dispatch_local(p, tctx, cid);
++	if (cid >= 0)
+ 		return cid;
+-	}
+ 
+ 	/*
+ 	 * A new task with no idle cid to go to is queued on the cid with the

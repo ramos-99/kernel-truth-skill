@@ -4,6 +4,7 @@
 # builds the repo's checked-out files, uncommitted changes included.
 set -e
 
+grade=$(dirname "$(realpath "$0")")
 repo=$(realpath "$1")
 out=$(realpath -m "$2")
 shift 2
@@ -27,5 +28,7 @@ for c in "$@"; do
 		clang -O2 -mcpu=v1 -g -target bpfel -fno-stack-protector -Wno-missing-declarations \
 			-I/usr/include/ -I"$bpf" -D__TARGET_ARCH_x86 -c "$bpf/$f.bpf.c" -o "$out/$c-$f.bpf.o"
 	done
+	clang -O2 -g -target bpfel -Wno-missing-declarations -I/usr/include/ -I"$bpf" \
+		-D__TARGET_ARCH_x86 -x c -c "$grade/event-layout.c" -o "$out/$c-event-layout.o" || true
 done
 ls "$out"

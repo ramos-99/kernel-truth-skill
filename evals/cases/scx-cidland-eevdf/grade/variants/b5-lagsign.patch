@@ -1,0 +1,13 @@
+Lag applied with the wrong sign on placement.
+
+--- a/scheds/experimental/scx_cidland/src/bpf/main.bpf.c	2026-11-23 19:33:18.825051915 +0000
++++ b/scheds/experimental/scx_cidland/src/bpf/main.bpf.c	2026-11-23 19:33:18.825196798 +0000
+@@ -1995,7 +1995,7 @@
+ 		u64 vruntime = cid_vref_place(cid, now);
+ 
+ 		if (cid_pack_weight(cid))
+-			vruntime -= tctx->vlag;
++			vruntime += tctx->vlag;
+ 		set_vruntime(tctx, vruntime, sleep);
+ 	}
+ 	vref_join(cid, p, tctx);

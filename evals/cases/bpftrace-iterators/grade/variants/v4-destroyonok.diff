@@ -1,0 +1,31 @@
+diff --git a/src/ast/passes/iter_desugar.cpp b/src/ast/passes/iter_desugar.cpp
+index 5b4851a6..09f63a36 100644
+--- a/src/ast/passes/iter_desugar.cpp
++++ b/src/ast/passes/iter_desugar.cpp
+@@ -177,7 +177,7 @@ Statement IterDesugar::desugar(For &f, Call &it, const BpfIterItem &info)
+ 
+   // if (kfunc::<kfunc>_new(...) == 0) { while ... }
+   auto *guarded = ast_.make_node<BlockExpr>(loc,
+-                                            StatementList({ loop }),
++                                            StatementList({ loop, ast_.make_node<ExprStatement>(loc, ast_.make_node<Call>(loc, info.kfunc + "_destroy", ExpressionList({ state_arg(loc, state) }), Call::Namespace::KFunc)) }),
+                                             ast_.make_node<None>(loc));
+   auto *guard = ast_.make_node<ExprStatement>(
+       loc,
+@@ -196,7 +196,7 @@ Statement IterDesugar::desugar(For &f, Call &it, const BpfIterItem &info)
+   // kfunc::<kfunc>_destroy(state). Always runs, including when new() failed,
+   // because the kernel requires the iterator to be released on every path
+   // once it has been touched.
+-  auto *destroy = ast_.make_node<ExprStatement>(
++  [[maybe_unused]] auto *destroy = ast_.make_node<ExprStatement>(
+       loc,
+       ast_.make_node<Call>(loc,
+                            info.kfunc + "_destroy",
+@@ -205,7 +205,7 @@ Statement IterDesugar::desugar(For &f, Call &it, const BpfIterItem &info)
+ 
+   auto *block = ast_.make_node<BlockExpr>(loc,
+                                           StatementList(
+-                                              { state_decl, guard, destroy }),
++                                              { state_decl, guard }),
+                                           ast_.make_node<None>(loc));
+   return ast_.make_node<ExprStatement>(loc, block);
+ }

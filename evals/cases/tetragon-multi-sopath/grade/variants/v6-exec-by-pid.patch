@@ -1,0 +1,12 @@
+--- a/bpf/process/uprobe_dyn.h
++++ b/bpf/process/uprobe_dyn.h
+@@ -318,7 +318,8 @@
+ 	__u64 self_exec_id;
+ 	__s32 idx;
+ 
+-	BPF_CORE_READ_INTO(&self_exec_id, task, self_exec_id);
++	// exec gives the thread a fresh identity, so key the per-slot state on it
++	self_exec_id = pid_tgid;
+ 	pending_c = task_storage_get(&tg_dyn_sm, task, NULL, 0);
+ 	idx = find_avail_pending_c_idx(pending_c, sym_id);
+ 	if (idx == -1) {

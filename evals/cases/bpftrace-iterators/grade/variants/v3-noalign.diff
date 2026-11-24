@@ -1,0 +1,13 @@
+diff --git a/src/ast/passes/codegen_llvm.cpp b/src/ast/passes/codegen_llvm.cpp
+index e13c62c1..b91478e4 100644
+--- a/src/ast/passes/codegen_llvm.cpp
++++ b/src/ast/passes/codegen_llvm.cpp
+@@ -3184,7 +3184,7 @@ void CodegenLLVM::maybeAllocVariable(const std::string &var_ident,
+ 
+   const bool use_scratch = bpftrace_.resources.scratch_buf_vars.contains(
+       { scope_stack_.back(), var_ident });
+-  const unsigned align = is_bpf_iter_state(var_type) ? 8 : 0;
++  const unsigned align = is_bpf_iter_state(var_type) ? 0 : 0;
+   auto *val = b_.CreateVariableAllocationInit(
+       var_type, var_ident, loc, use_scratch, align);
+   variables_[scope_stack_.back()][var_ident] = VariableLLVM{

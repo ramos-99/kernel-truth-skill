@@ -1,0 +1,25 @@
+diff --git a/bpf/process/uprobe_dyn.h b/bpf/process/uprobe_dyn.h
+index 7ad74df51..e4c8691e0 100644
+--- a/bpf/process/uprobe_dyn.h
++++ b/bpf/process/uprobe_dyn.h
+@@ -332,20 +332,6 @@ uprobe_dyn_state_machine(struct pt_regs *ctx, struct uprobe_regs *regs, __u32 sy
+ 	// * we are overriding a different symbol (from another selector)
+ 	// * the thread calls `execve` thus replacing its process image
+ 	if (!pending_c || pending_c->stage[idx] == STAGE_NONE || pending_c->self_exec_id[idx] != self_exec_id) {
+-		if (pending_c && find_pending_idx(pending_c, idx) != -1) {
+-			// A resolution of symbol A runs real code on the same thread:
+-			// mmap(), dlopen(), dynamic loader, and the ctors of the library being loaded.
+-			// If that code calls another traced symbol B with a sopath override,
+-			// a nested resolution starts. Avoid that.
+-			// Example with overrides on malloc (A) and free (B):
+-			// 1. malloc is hit -> call_mmap() saves A's context and redirects into mmap()
+-			// 2. mmap() returns to the fake frame. A advances and redirects into dlopen()
+-			// 3. Inside dlopen(), the loader calls free.
+-			// 4. free is hit at a deeper stack; luckily enough, we know there is an in flight override;
+-			//    otherwise we would have trashed current resolution registers
+-			DEBUG_SO("another symbol resolution is in progress, skipping: tid %ld, sym %d", pid_tgid, sym_id);
+-			return 0;
+-		}
+ 		// Non-existent task storage or slot on this thread, or the
+ 		// task exec'd another image: (re)start the state machine.
+ 		DEBUG_SO("starting state machine to load symbol: tid %ld, sym %d, exec_id: %ld", pid_tgid, sym_id, self_exec_id);

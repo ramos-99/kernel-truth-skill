@@ -1,0 +1,20 @@
+diff --git a/KubeArmor/BPF/shared.h b/KubeArmor/BPF/shared.h
+index f65d108c..32507122 100644
+--- a/KubeArmor/BPF/shared.h
++++ b/KubeArmor/BPF/shared.h
+@@ -187,6 +187,7 @@ typedef struct
+   u32 ppid;
+   u32 pid;
+   u32 uid;
++  u32 oid;
+   u32 event_id;
+   s64 retval;
+ 
+@@ -197,7 +198,6 @@ typedef struct
+ 
+   // exec event
+   u64 exec_id;
+-  u32 oid;
+ } event;
+ 
+ struct

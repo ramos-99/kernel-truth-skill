@@ -1,0 +1,21 @@
+diff --git a/scheds/experimental/scx_cidland/src/bpf/main.bpf.c b/scheds/experimental/scx_cidland/src/bpf/main.bpf.c
+index dcf59052..9b77f1d7 100644
+--- a/scheds/experimental/scx_cidland/src/bpf/main.bpf.c
++++ b/scheds/experimental/scx_cidland/src/bpf/main.bpf.c
+@@ -1276,13 +1276,9 @@ static u64 task_weight(const struct task_struct *p, const struct task_ctx *tctx)
+ 	u64 w;
+ 	u32 idx, cgw;
+ 
+-	if (p->policy == SCHED_IDLE) {
+-		w = WEIGHT_IDLEPRIO;
+-	} else {
+-		idx = p->static_prio - MAX_RT_PRIO;
+-		w = idx < ARRAY_SIZE(prio_to_weight) ?
+-			prio_to_weight[idx] : NICE_0_WEIGHT;
+-	}
++	w = (u64)p->scx.weight * NICE_0_WEIGHT / 100;
++	if (!w)
++		w = 1;
+ 
+ 	cgw = tctx ? tctx->cgw : 0;
+ 	if (!cgw || cgw == CGROUP_WEIGHT_DFL)

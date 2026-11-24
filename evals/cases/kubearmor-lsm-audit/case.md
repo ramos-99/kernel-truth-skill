@@ -27,15 +27,18 @@ Run in a clone of KubeArmor at `ee4fbe28e132d4dcf9bdd5c320c93477e61aab8c`, the c
 
 ## Grading
 
-1. Build the objects with `evals/cases/kubearmor-lsm-audit/grade/build-ka.sh <repo> <out>/ka worktree ee4fbe28` (needs clang and bpftool).
-2. Run `VM_EXTRA=<out> evals/cases/kubearmor-lsm-audit/run-lsm.sh evals/cases/kubearmor-lsm-audit <vmlinuz>` on at least v6.6, v6.12, v6.16 and v7.2. Nothing may be rejected that the parent loads on that kernel (facts 3, 5). With clang 23.1.5 the parent already fails 2/8 `enforcer` and 11/11 `enforcer_path` programs on v6.6 to v6.12, and none from v6.15. The fork check (fact 8) is extra credit, since the merged PR fails it on v6.16+.
-3. Run `evals/cases/kubearmor-lsm-audit/grade/run.sh <out>/ka/worktree-enforcer.bpf.o <vmlinuz> [audit-bit]`. With no rule, exec and open give `events=0`. Audit gives `events=1 retval=0` (event ids 352 and 450), and Block gives `Permission denied` with `events=1 retval=-13` (KubeArmor's `EPERM` is 13). The guest assumes the parent's map and event layouts and Audit as `1 << 10`, so adapt `grade/guest.c` if those changed.
-4. Read the diff for facts 2, 4, 6 and 7.
+1. Read the implementation and fill in `grade/adapter.h`: how a rule's Audit and Block actions go into the inner-map value, the value size, and the names of the event id, retval and owner id fields. The defaults match the merged PR. Scoring doesn't depend on them.
+2. Run `evals/cases/kubearmor-lsm-audit/grade/run.sh <tree> [vmlinuz...]`. It builds `enforcer` and `enforcer_path` with clang and bpftool, plus `grade/event-layout.c` against the tree's own `shared.h` so the guest can find the event fields through BTF. Then it boots each kernel with `bpf` in `lsm=` (by default v6.15 and Arch 7.3.5). The merged tree also passes on v6.16, v6.18 and v7.2.
+3. The guest loads and attaches every program in both objects, as KubeArmor does, so a rejected program anywhere is a failure (facts 3, 5). Then it runs no rule, Audit and Block for exec, file open, a write under a read-only rule, UDP `socket` and `connect`, and `CAP_CHOWN`. Audit has to allow the operation and send one event with retval >= 0. Block has to deny it and send an event with retval < 0. With no rule there must be no event. Owner-only rules run as uid 1000, gid 2000, against files, a directory and a binary owned by uid 3000. Opening your own file sends nothing. Open, exec and `mkdir` on uid 3000's things must alert under Audit and be denied under Block, and a write must alert under Audit, all with owner id 3000 in the event. `mkdir` in your own directory is allowed (fact 7). An owner-only allow rule under audit posture lets the open through and alerts.
+4. The last line is `VERDICT PASS`, `FAIL (...)` or `ENV (...)`, with exit code 0, 1 or 2. The guest answers ENV on kernels older than 6.15, where clang 23 builds of the parent already fail to load, and when `bpf` isn't an active LSM.
+5. `grade/selftest.sh <clone with both commits>` runs the grader on merged (PASS), parent (FAIL), `grade/variants/*.patch` (FAIL) and `ok-*.patch` (PASS, correct implementations that move the owner id next to uid, or rename it and move the Audit bit). A variant's `<name>.adapter.h` replaces `grade/adapter.h` for its run (`ADAPTER=<file> run.sh`).
 
-The merged version passes step 3 on v6.16 and Arch 7.3.5, and for exec only on v6.6 and v6.12, where `enforce_file` doesn't load for any version. The parent gives no Audit events, and `dc96b08`'s `enforce_proc` doesn't load on v6.12 and v6.16.
+The Go side isn't graded (writing the Audit bit into the rule maps, the system monitor config flag, decoding the event), so the case only tests the BPF part.
+
+Also not graded: fact 8's fork tracepoint and argv reads, because `process_monitor.bpf.c` is a merged-PR choice and fails on v6.16+ anyway, and the `ret` pass-through in `enforce_proc`, since a nonzero earlier verdict stops the chain before `enforce_proc` runs (fact 2). Under block posture the merged PR lets a non-owner open through an owner-only allow rule, where the parent blocked it. The guest prints that check as `info` and doesn't score it.
 
 ## Results
 
 Not run yet.
 
-Not tested: the Go side (Audit vs Block precedence in `insertRule`, the system monitor flag), network, DNS and capability audit paths, arm64, kernels older than v6.6, alert throttling, and whether the programs stay idle without `bpf` in the lsm list.
+Not tested: the Go side (Audit vs Block precedence in `insertRule`, the system monitor flag), DNS and `socket_accept` audit, arm64, kernels older than 6.15, alert throttling, and whether the programs stay idle without `bpf` in the lsm list.

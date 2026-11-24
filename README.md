@@ -37,7 +37,7 @@ Each case is a folder in [evals/cases/](evals/cases/) with a `case.md` (prompt, 
 
 - Two come from my aya PRs. Their answers are split into what maintainer review confirmed and what I found with Claude's help.
 - Five come from comments where a developer corrected a kernel claim in a real PR, drawn at random from a list.
-- Five are whole features from PRs merged since July 2026, so they're unlikely to be in the model's training data. Each depends on a chain of several kernel facts, and is graded by building and running what the model writes. These haven't been run yet.
+- Four are whole features from PRs merged since July 2026, so they're unlikely to be in the model's training data. Each depends on a chain of several kernel facts, and is graded by building and running what the model writes. These haven't been run yet.
 - Two were picked by Claude. They're kept apart, because a question Claude finds natural tends to be one the tested model already knows.
 
 How cases are chosen:

@@ -1,0 +1,14 @@
+diff -ru a/KubeArmor/BPF/shared.h b/KubeArmor/BPF/shared.h
+--- a/KubeArmor/BPF/shared.h
++++ b/KubeArmor/BPF/shared.h
+@@ -1026,7 +1026,9 @@
+         {
+           dent = f_path->dentry;
+         }
+-        if (!is_owner_path(dent, &oid))
++        bool own = is_owner_path(dent, &oid);
++        oid = BPF_CORE_READ(f_path, dentry, d_inode, i_uid.val);
++        if (!own)
+         {
+           if (val->filemask & RULE_DENY)
+           {

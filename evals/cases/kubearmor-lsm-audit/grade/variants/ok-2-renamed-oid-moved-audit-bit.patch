@@ -1,0 +1,104 @@
+diff -ru a/KubeArmor/BPF/enforcer.bpf.c b/KubeArmor/BPF/enforcer.bpf.c
+--- a/KubeArmor/BPF/enforcer.bpf.c
++++ b/KubeArmor/BPF/enforcer.bpf.c
+@@ -457,7 +457,7 @@
+   init_context(task_info);
+   bpf_probe_read_str(&task_info->data.path, MAX_STRING_SIZE, store->path);
+   bpf_probe_read_str(&task_info->data.source, MAX_STRING_SIZE, store->source);
+-  task_info->oid = oid;
++  task_info->owner_uid = oid;
+   task_info->event_id = _SECURITY_BPRM_CHECK;
+   task_info->retval = retval;
+   bpf_ringbuf_submit(task_info, 0);
+diff -ru a/KubeArmor/BPF/shared.h b/KubeArmor/BPF/shared.h
+--- a/KubeArmor/BPF/shared.h
++++ b/KubeArmor/BPF/shared.h
+@@ -197,7 +197,7 @@
+ 
+   // exec event
+   u64 exec_id;
+-  u32 oid;
++  u32 owner_uid;
+ } event;
+ 
+ struct
+@@ -217,7 +217,7 @@
+ #define RULE_DENY 1 << 7
+ #define RULE_ARGSET 1 << 8
+ #define RULE_PTS 1 << 9
+-#define RULE_AUDIT 1 << 10
++#define RULE_AUDIT 1 << 12
+ 
+ #define MASK_WRITE 0x00000002
+ #define MASK_READ 0x00000004
+@@ -686,21 +686,21 @@
+   return false;
+ }
+ 
+-static bool is_owner(struct file *file_p, u32 *oid)
++static bool is_owner(struct file *file_p, u32 *owner_uid)
+ {
+   kuid_t owner = BPF_CORE_READ(file_p, f_inode, i_uid);
+   unsigned int z = bpf_get_current_uid_gid();
+-  *oid = owner.val;
++  *owner_uid = owner.val;
+   if (owner.val != z)
+     return false;
+   return true;
+ }
+ 
+-static bool is_owner_path(struct dentry *dent, u32 *oid)
++static bool is_owner_path(struct dentry *dent, u32 *owner_uid)
+ {
+   kuid_t owner = BPF_CORE_READ(dent, d_inode, i_uid);
+   unsigned int z = bpf_get_current_uid_gid();
+-  *oid = owner.val;
++  *owner_uid = owner.val;
+   if (owner.val != z)
+     return false;
+   return true;
+@@ -798,7 +798,7 @@
+   // needed a third key because we need to copy contents from store and keep
+   // resetting the contents of this key so data in store needs to persist
+ 
+-  u32 oid = 0;
++  u32 owner_uid = 0;
+ 
+   u32 zero = 0;
+   bufs_k *z = bpf_map_lookup_elem(&bufk, &zero);
+@@ -1026,7 +1026,7 @@
+         {
+           dent = f_path->dentry;
+         }
+-        if (!is_owner_path(dent, &oid))
++        if (!is_owner_path(dent, &owner_uid))
+         {
+           if (val->filemask & RULE_DENY)
+           {
+@@ -1147,7 +1147,7 @@
+     {
+       if (val && (val->filemask & RULE_OWNER))
+       {
+-        if (!is_owner_path(f_path->dentry, &oid))
++        if (!is_owner_path(f_path->dentry, &owner_uid))
+         {
+           setRetval(val->filemask, &retval);
+ 
+@@ -1217,7 +1217,7 @@
+     {
+       if (val && (val->filemask & RULE_OWNER))
+       {
+-        if (!is_owner_path(f_path->dentry, &oid))
++        if (!is_owner_path(f_path->dentry, &owner_uid))
+         {
+           setRetval(val->filemask, &retval);
+ 
+@@ -1306,7 +1306,7 @@
+ 
+   bpf_probe_read_str(&task_info->data.path, MAX_STRING_SIZE, store->path);
+   bpf_probe_read_str(&task_info->data.source, MAX_STRING_SIZE, store->source);
+-  task_info->oid = oid;
++  task_info->owner_uid = owner_uid;
+   task_info->event_id = eventID;
+   task_info->retval = retval;
+   bpf_ringbuf_submit(task_info, 0);

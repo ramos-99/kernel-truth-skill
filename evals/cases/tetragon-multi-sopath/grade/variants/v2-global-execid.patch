@@ -1,0 +1,31 @@
+diff --git a/bpf/process/uprobe_dyn.h b/bpf/process/uprobe_dyn.h
+index 7ad74df51..627d39487 100644
+--- a/bpf/process/uprobe_dyn.h
++++ b/bpf/process/uprobe_dyn.h
+@@ -78,7 +78,7 @@ struct pending_call {
+ 	__u64 orig_addr; // initial addr to be restored in case of errors
+ 	__u64 expected_sp; // used to avoid a signal handler called in the middle of our state machine
+ 	__u64 true_return_addr; // final jump return address; only used for arm64
+-	__u64 self_exec_id[MAX_SELECTORS]; // in case the thread execs another image, we reset the whole flow
++	__u64 self_exec_id; // in case the thread execs another image, we reset the whole flow
+ 
+ 	// Computed addresses (already libc_base shifted) for mmap and dlopen + final cache for symbol address
+ 	struct {
+@@ -189,7 +189,7 @@ FUNC_INLINE int call_mmap(struct pt_regs *ctx, struct task_struct *task, __u64 p
+ 
+ 	store_orig_regs(ctx, pending_c);
+ 
+-	pending_c->self_exec_id[idx] = self_exec_id;
++	pending_c->self_exec_id = self_exec_id;
+ 	pending_c->sym_id[idx] = sym_id;
+ 	pending_c->stage[idx] = STAGE_MMAP_PENDING;
+ 
+@@ -331,7 +331,7 @@ uprobe_dyn_state_machine(struct pt_regs *ctx, struct uprobe_regs *regs, __u32 sy
+ 	// * pending_c was never allocated (ie: first time a traced symbol with override.sopath is called)
+ 	// * we are overriding a different symbol (from another selector)
+ 	// * the thread calls `execve` thus replacing its process image
+-	if (!pending_c || pending_c->stage[idx] == STAGE_NONE || pending_c->self_exec_id[idx] != self_exec_id) {
++	if (!pending_c || pending_c->stage[idx] == STAGE_NONE || pending_c->self_exec_id != self_exec_id) {
+ 		if (pending_c && find_pending_idx(pending_c, idx) != -1) {
+ 			// A resolution of symbol A runs real code on the same thread:
+ 			// mmap(), dlopen(), dynamic loader, and the ctors of the library being loaded.

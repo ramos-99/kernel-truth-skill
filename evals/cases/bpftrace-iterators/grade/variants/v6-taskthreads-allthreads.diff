@@ -1,0 +1,11 @@
+--- a/src/bpf_iters.cpp
++++ b/src/bpf_iters.cpp
+@@ -25,7 +25,7 @@
+     .yields = "struct task_struct",
+     .min_args = 1,
+     .max_args = 1,
+-    .flags = 2 },
++    .flags = 1 },
+   { .name = "iter_task_vma",
+     .kfunc = "bpf_iter_task_vma",
+     .yields = "struct vm_area_struct",

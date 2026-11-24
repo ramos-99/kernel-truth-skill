@@ -1,0 +1,16 @@
+Iterator state may go to a scratch map like other variables. Only on_stack_limit = 0 shows it. From the re-audit (w3).
+
+diff --git a/src/ast/passes/resource_analyser.cpp b/src/ast/passes/resource_analyser.cpp
+index ab9bfc64..cb400a38 100644
+--- a/src/ast/passes/resource_analyser.cpp
++++ b/src/ast/passes/resource_analyser.cpp
+@@ -668,8 +668,7 @@ void ResourceAnalyser::update_variable_info(Variable &var)
+     is_iter_var = static_cast<size_t>(scope_depth) < iter_scope_depths_.back();
+   }
+ 
+-  if ((exceeds_stack_limit(ty.GetSize()) || is_iter_var) &&
+-      !is_bpf_iter_state(ty)) {
++  if ((exceeds_stack_limit(ty.GetSize()) || is_iter_var)) {
+     resources_.max_variable_size = std::max(resources_.max_variable_size,
+                                             ty.GetSize());
+     if (resources_.scratch_buf_vars.emplace(scope, var.ident).second) {

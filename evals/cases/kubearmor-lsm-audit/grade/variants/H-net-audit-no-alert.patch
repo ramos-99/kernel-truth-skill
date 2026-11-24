@@ -1,0 +1,16 @@
+diff --git a/KubeArmor/BPF/enforcer.bpf.c b/KubeArmor/BPF/enforcer.bpf.c
+index 8017074..10952b8 100644
+--- a/KubeArmor/BPF/enforcer.bpf.c
++++ b/KubeArmor/BPF/enforcer.bpf.c
+@@ -633,9 +633,9 @@ decision:
+           goto ringbuf;
+         }
+       }
+-      else
++      else if (val->processmask & RULE_DENY)
+       {
+-        setRetval(val->processmask, &retval);
++        retval = BLOCK;
+         goto ringbuf;
+       }
+     }

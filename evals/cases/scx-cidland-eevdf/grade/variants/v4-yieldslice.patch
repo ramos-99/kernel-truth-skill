@@ -1,0 +1,12 @@
+diff --git a/scheds/experimental/scx_cidland/src/bpf/main.bpf.c b/scheds/experimental/scx_cidland/src/bpf/main.bpf.c
+index dcf59052..c4d2bd99 100644
+--- a/scheds/experimental/scx_cidland/src/bpf/main.bpf.c
++++ b/scheds/experimental/scx_cidland/src/bpf/main.bpf.c
+@@ -2567,7 +2567,6 @@ bool BPF_STRUCT_OPS(cidland_yield, struct task_struct *from,
+ 	 * Without an ops.yield the kernel ends the slice itself; with one
+ 	 * that is this op's job, see yield_task_scx().
+ 	 */
+-	scx_bpf_task_set_slice(from, 0);
+ 
+ 	/*
+ 	 * update_curr(), which leaves a deadline ahead of the vruntime

@@ -1,0 +1,11 @@
+--- a/src/ast/passes/iter_desugar.cpp
++++ b/src/ast/passes/iter_desugar.cpp
+@@ -136,8 +136,6 @@
+   }
+   if (info.flags) {
+     new_args.emplace_back(ast_.make_node<Integer>(loc, *info.flags));
+-  } else if (it.vargs.size() > 1) {
+-    new_args.emplace_back(it.vargs.at(1));
+   } else {
+     new_args.emplace_back(ast_.make_node<Integer>(loc, 0));
+   }

@@ -1,0 +1,13 @@
+diff --git a/KubeArmor/BPF/shared.h b/KubeArmor/BPF/shared.h
+index f65d108..bd5904b 100644
+--- a/KubeArmor/BPF/shared.h
++++ b/KubeArmor/BPF/shared.h
+@@ -1020,7 +1020,7 @@ decision:
+ 
+         if (eventID == _FILE_MKNOD || eventID == _FILE_MKDIR)
+         {
+-          dent = BPF_CORE_READ(f_path, dentry, d_parent);
++          dent = f_path->dentry;
+         }
+         else
+         {

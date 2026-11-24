@@ -1,0 +1,51 @@
+--- a/src/ast/passes/iter_desugar.cpp
++++ b/src/ast/passes/iter_desugar.cpp
+@@ -167,8 +167,29 @@
+                              brk));
+ 
+   // while (true) { ... }
++  // Bug for the self-test: iter_task_threads stops after the first task.
++  const std::string once = "$__once_" + std::to_string(next_id_++);
++  StatementList body_stmts({ assign });
++  if (info.flags == 2) {
++    body_stmts.emplace_back(ast_.make_node<ExprStatement>(
++        loc,
++        ast_.make_node<IfExpr>(
++            loc,
++            ast_.make_node<Variable>(loc, once),
++            ast_.make_node<BlockExpr>(
++                loc,
++                StatementList(
++                    { ast_.make_node<Jump>(loc, JumpType::BREAK) }),
++                ast_.make_node<None>(loc)),
++            ast_.make_node<None>(loc))));
++    body_stmts.emplace_back(ast_.make_node<AssignVarStatement>(
++        loc,
++        ast_.make_node<Variable>(loc, once),
++        ast_.make_node<Integer>(loc, 1)));
++  }
++  body_stmts.emplace_back(step);
+   auto *body = ast_.make_node<BlockExpr>(loc,
+-                                         StatementList({ assign, step }),
++                                         std::move(body_stmts),
+                                          ast_.make_node<None>(loc));
+   auto *loop = ast_.make_node<While>(loc,
+                                      ast_.make_node<Boolean>(loc, true),
+@@ -176,8 +197,16 @@
+   loop->is_iter = true;
+ 
+   // if (kfunc::<kfunc>_new(...) == 0) { while ... }
++  StatementList guarded_stmts;
++  if (info.flags == 2) {
++    guarded_stmts.emplace_back(ast_.make_node<AssignVarStatement>(
++        loc,
++        ast_.make_node<Variable>(loc, once),
++        ast_.make_node<Integer>(loc, 0)));
++  }
++  guarded_stmts.emplace_back(loop);
+   auto *guarded = ast_.make_node<BlockExpr>(loc,
+-                                            StatementList({ loop }),
++                                            std::move(guarded_stmts),
+                                             ast_.make_node<None>(loc));
+   auto *guard = ast_.make_node<ExprStatement>(
+       loc,
