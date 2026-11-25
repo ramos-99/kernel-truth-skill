@@ -5,7 +5,7 @@ The task is a whole feature from [sched-ext/scx#3800](https://github.com/sched-e
 ## Prompt
 
 ```text
-scx_cidland (scheds/experimental/scx_cidland) is a cid-form sched_ext scheduler with a vruntime/deadline queue borrowed from scx_cosmos. I want to turn it into a port of the kernel's EEVDF scheduler (fair.c) on top of sched_ext, as a baseline playground: close enough to upstream that changes can be applied to it incrementally and measured against the default kernel scheduler. Use fair.c's placement and fairness rules: order tasks by virtual deadline against a per-runqueue reference, keep lag across sleeps, charge runtime by weight the way fair.c does, and follow its wakeup preemption and wakeup CPU selection. Nice levels, SCHED_IDLE, a task's sched_runtime, cpu.weight and sched_yield() should all behave the way they do under EEVDF. It doesn't have to be a complete 1:1 port, but list what's missing in the README. Our machines run Linux 7.2. Implement it in this repo. Don't use sudo.
+scx_cidland (scheds/experimental/scx_cidland) is a cid-form sched_ext scheduler with a vruntime/deadline queue borrowed from scx_cosmos. I want to turn it into a port of the kernel's EEVDF scheduler (fair.c) on top of sched_ext, as a baseline playground: close enough to upstream that changes can be applied to it incrementally and measured against the default kernel scheduler. Use fair.c's placement and fairness rules: order tasks by virtual deadline against a per-runqueue reference, keep lag across sleeps, charge runtime by weight the way fair.c does, and follow its wakeup preemption and wakeup CPU selection. Nice levels, SCHED_IDLE, a task's sched_runtime, cpu.weight and sched_yield() should all behave the way they do under EEVDF. It doesn't have to be a complete 1:1 port, but list what's missing in the README. Our machines run Linux 7.2. Implement it in this repo. Don't use sudo on this machine.
 ```
 
 Run in a clone of sched-ext/scx at `8b2479571c0768310510c061960d2c40cb64d160`, the commit before the PR. The PR's 66 commits end at `38b355f2010b1abb91b07acd9141d7773cc17acd` and were merged as `6e01d48ac53a`.
@@ -50,10 +50,62 @@ The checks (EEVDF and merged numbers are in `grade/check`):
 
 `grade/selftest.sh <scx clone>` builds the merged PR (graded twice), the parent and the merged PR with each patch in `grade/variants/` applied. Merged has to pass, the parent and the wrong variants have to fail, and c4 and c5 (correct but different) have to pass. b2 (no idle-curr rule) is marked "Not caught" and passes. Beside one SCHED_IDLE hog the merged code never treats the hog as owed service, and with two hogs, where EEVDF does show the rule (5us), the merged PR itself waits 899us for the tick.
 
+### Claim audit
+
+The procedure is in the [README](../../../README.md#claim-audit).
+
+| Run | Claims | Right | Too broad | Wrong | Unverified |
+|---|---|---|---|---|---|
+| As is | 104 | 82 | 10 | 11 | 1 |
+| With the sentence | 91 | 75 | 7 | 9 | 0 |
+
+Judged on v7.2. Wrong in both runs: the imbalance is 125 outside the LLC. `sd_init()` uses 117, and 110 for SMT.
+
+Wrong, as is:
+
+- A task inserted from `ops.enqueue` is already in the DSQ. `mark_direct_dispatch()` only records it, and the insert happens after the op returns.
+- `cfs_rq_min_slice()` never exceeds the base slice. It starts at `~0ULL`.
+- Without `RUN_TO_PARITY` the minimum quantum is the scaled base slice. It's the normalized 0.7ms.
+- Returning from `ops.dispatch` keeps the current task running. `main.rs` sets `SCX_OPS_ENQ_LAST`, so it's enqueued again.
+- `ops.select_cid` runs for exec. `select_task_rq_scx()` returns early on `WF_EXEC`.
+- After `scx_bpf_dsq_move()` the task isn't queued anywhere. It's on the local DSQ.
+- Nothing in `fair.c` stops a task between ticks. `HRTICK` is on with `CONFIG_HRTIMER_REARM_DEFERRED`.
+- The lag limit is double the slice. The code uses `max_slice + TICK_NSEC`, and the kernel's own comment is stale.
+- `pick_next_task_fair()` and `newidle_balance()` are named as current. Neither exists in v7.2.
+
+Wrong, with the sentence:
+
+- `tg->shares` is unscaled. It's stored through `scale_load()`.
+- `scx_bpf_dsq_move()` to a CPU the task can't use returns false. It ends the scheduler with an error.
+- The slice scan in `ops.enqueue` sees the woken task. It isn't in the DSQ yet.
+- The lowest vruntime in a capped walk is always eligible.
+- The wakee's load is part of the previous CPU's load, so it's subtracted. That holds for PELT but not for this port's runnable weight.
+- `wake_up_new_task()` is the only enqueue of a task never placed. Enabling the scheduler enqueues existing tasks too.
+- Picking the same task again re-arms its slice protection. `put_prev_set_next_task()` returns early.
+- `__setparam_fair()` is in `syscalls.c`. It's in `fair.c`.
+
+The too broad claims are mostly limits left out: `sched_runtime` applies only to `fair_policy()` tasks, `resched_curr_lazy()` is lazy only with lazy preemption, and the x86 JIT refuses only fetching AND, OR and XOR on the arena.
+
 ## Results
 
 The selftest is green on Arch 7.2.9. Merged passes twice, and the parent fails every weight, lag, sched_runtime and wakeup-latency check. v1 (`p->scx.weight`) fails nice 17/18, 18/19 and 19/IDLE. v2 (no lag) fails lag and the 20ms-hog p90 (19.8ms). v3 (no sched_runtime) fails both request checks. v4 (yield without ending the slice) fails yield. v5 (no wakeup preemption) fails lag and the latency checks. v6 (always the previous CPU) fails wakeup CPU selection. b1 (`se.load` weight) fails the weight checks, b3 (deadline scaled the wrong way) fails nice 5 vs burst, b4 (yield without forfeit) fails yield, b5 (lag sign) and b6 (kick without `SCX_KICK_PREEMPT`) fail lag and latency, and b7 (init error) is FAIL. c4 and c5 pass, and b2 passes as noted above.
 
-No model runs yet.
+Sonnet 5.5 at medium effort, one fresh headless session per run with Write/Edit allowed, isolated from this repo. Capped at 6 cores and 8 GB. Neither run loaded its code, though QEMU and `/dev/kvm` were available, and both said so.
+
+As is: FAIL in 4 of 4 gradings on Arch 7.2.9, on both burst checks, both `sched_runtime` checks and the median latency beside the nice 0 and 20ms hogs (1899us). Weights, yield, `SCHED_IDLE` and CPU selection pass. A copy with two fixes passes:
+
+- Wakeup preemption scans the DSQ for the woken task from `ops.enqueue`, before it's inserted. This causes the burst and latency failures.
+- `rq_min_slice()` starts at the base slice, so longer requests aren't protected. This causes the `sched_runtime` failures.
+
+With the sentence: FAIL in 3 of 3 gradings, because it doesn't load. The verifier stops `cidland_dispatch` at 1000001 instructions (fact 13). A copy with two fixes passes 2 of 2:
+
+- Stepping the three `++n` scan counters by a writable `volatile` makes it load.
+- It's then ejected ("SCX_DSQ_LOCAL[_ON] target CPU 3 not allowed"), because `pull_task()` doesn't check affinity. Checks after that point measure the kernel's own scheduler.
+
+`cpu.weight`, tested separately on Arch 7.2.9 with two cgroups on one CPU at 400 and 100: 3.97 as is and 3.98 under EEVDF. The fixed copy of the run with the sentence gives 1.00, and 3.99 once `tg->shares` is scaled down.
+
+Both fixed copies switch 51 to 53 times a second with a 100ms request, and EEVDF 23 to 25. The limit of 100 doesn't catch this. Their 20ms backstop slice is the likely cause.
+
+On Arch 7.3.5 neither loads. `scx_bpf_cid_topo` isn't resolved (fact 10), seen in the verifier log as is and in libbpf's relocation log for the fixed copy with the sentence.
 
 Not tested: re-enqueue reasons, PELT, the watchdog, the jump-sequence limit, load balancing, cpufreq, `cpu.weight` on 7.3 with a fixed `scx_bpf_cid_topo()` call, and the SCHED_IDLE preemption rule separately from its weight (a waker beats a weight-3 hog either way).

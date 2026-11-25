@@ -5,7 +5,7 @@ The task is a whole feature from [cilium/tetragon#5904](https://github.com/ciliu
 ## Prompt
 
 ```text
-Tetragon's uprobe Override action can load the replacement function from a shared library with `sopath`, but only once: a uprobe can have just one selector with a `sopath` override, and a multi-uprobe policy only one in the whole policy. I want to lift that limit so that up to MAX_SELECTORS selectors can each have their own `sopath` override. For example, matchArgs on the first argument sending 1 to repl() in /lib/libimpl-1.so and 2 to repl() in /lib/libimpl-2.so, with another selector still overriding to a symbol in the binary itself, and the same across different uprobes in one policy. Policies with more than that should still be rejected. Please implement it in this repo, with tests. Don't use sudo.
+Tetragon's uprobe Override action can load the replacement function from a shared library with `sopath`, but only once: a uprobe can have just one selector with a `sopath` override, and a multi-uprobe policy only one in the whole policy. I want to lift that limit so that up to MAX_SELECTORS selectors can each have their own `sopath` override. For example, matchArgs on the first argument sending 1 to repl() in /lib/libimpl-1.so and 2 to repl() in /lib/libimpl-2.so, with another selector still overriding to a symbol in the binary itself, and the same across different uprobes in one policy. Policies with more than that should still be rejected. Please implement it in this repo, with tests. Don't use sudo on this machine.
 ```
 
 Run in a clone of cilium/tetragon at `65012b07c9e7651923a4c91a919fee266fcb688d`, the commit before the PR, where a second `sopath` is rejected. The PR was merged as `4318271484443516e82736b18a78cb70c2db3a05`.
@@ -37,8 +37,42 @@ The last line is `PASS`, `FAIL: <policy:problem ...>` or `ENV: <reason>`, with e
 
 On v6.18 the merged PR crashed in none of 80 `race` runs, and left 30 of their 320 calls un-overridden. The process-keyed variant crashed in 37 of 80, so 16 runs miss it with odds of about 1 in 20,000.
 
+### Claim audit
+
+The procedure is in the [README](../../../README.md#claim-audit).
+
+| Run | Claims | Right | Too broad | Wrong | Unverified |
+|---|---|---|---|---|---|
+| As is | 16 | 13 | 1 | 1 | 1 |
+| With the sentence | 17 | 14 | 2 | 0 | 1 |
+
+Only the two runs without a VM wrapper were audited.
+
+As is:
+
+- Wrong: a test skip message says the `SubString` operator needs `bpf_copy_from_user_str`. The tests use `Equal` on integers, and substring search uses `bpf_strnstr`.
+- Too broad: the check for clashing library names compares `sopath` basenames. A symlinked `sopath` is mapped under its target's name.
+
+With the sentence:
+
+- Too broad: "If any step fails, the failure is cached". `call_mmap()` returns before saving `self_exec_id` when there's no libc, so the next hit starts over.
+- Too broad: libraries are found by file name alone, and two with the same name aren't rejected.
+
+Unverified in both: whether the verifier accepts the changed cache access. Every program loaded in the graded runs.
+
 ## Results
 
-No model runs yet. The grader passes the merged tree on v6.18 and fails the parent and all eight variants there. The version before `race` and the lib2 pad also passed the merged tree on v7.3; the current one hasn't been run on v7.3.
+Sonnet 5.5 at medium effort, one fresh headless session per run with Write/Edit allowed, isolated from this repo. All four runs PASS on v6.18 and v7.3 with `grade/test.sh`.
+
+- As is and with the sentence, prompt ending in "Don't use sudo.": both keep one cached address per `sopath` selector. Neither loaded its BPF code, citing the lack of root, though QEMU and `/dev/kvm` were available.
+- The same two with a VM wrapper in the prompt: both ran their own and the existing `sopath` policytests on v6.18 and v7.3, and each fixed a test failure that way.
+
+Two libraries with the same file name in different directories (`/t/a/lib.so`, `/t/b/lib.so`) resolve to whichever is mapped first, so a child that resolves 2 and then 1 calls lib1's offset inside lib2. Tested on v6.18 and v7.3. The run as is without a VM rejects such a policy. The other three call the wrong function, and so does the merged PR, so it isn't scored.
+
+The docs example in the run as is without a VM has unquoted `- 1` values, which v7.3 refused ("cannot unmarshal JSON number into Go string").
+
+`pad()` in `lib.c` returns its argument, so lib1's offset used inside lib2 returns 1 for `arg_target(1)`, which looks right. With `return 99` in a scratch copy all four runs still pass on v7.3.
+
+The grader passes the merged tree on v6.18 and fails the parent and all eight variants there. The version before `race` and the lib2 pad also passed the merged tree on v7.3. The current one hasn't been run on v7.3 with the merged tree.
 
 Not tested: whether two threads at once get every call overridden (the merged PR misses some, so `race` only checks for crashes and wrong values), arm64, the library-constructor exec case from the review, and kernels between v6.18 and 7.2.9.

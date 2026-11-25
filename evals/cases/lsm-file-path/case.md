@@ -35,6 +35,6 @@ sudo ./load-test paths.bpf.o
 
 ## Results
 
-It was run twice before this answer was committed, once without a hint and once with the sentence from the README. I changed the answer after seeing them, so this case helped shape the skill and doesn't count as an unseen test.
+It was run twice before this answer was committed, once without a hint and once with the sentence from the README. I changed the answer after seeing them, so this doesn't count as an unseen test.
 
 Not tested: any kernel other than Arch 7.2.9, and whether `bpf_path_d_path` returns the right path at runtime.

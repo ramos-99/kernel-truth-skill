@@ -1,6 +1,6 @@
 # Process exit logger
 
-The task is based on `3e816361e94a`, whose message gives this use case. Picked by Claude, so kept apart from the PR-sourced cases. The model seems to know this topic well already, so the case says little about the skill. The answers come from kernel source and VM tests.
+The task is based on `3e816361e94a`, whose message gives this use case. Picked by Claude, so kept apart from the PR-sourced cases. The answers come from kernel source and VM tests.
 
 ## Prompt
 

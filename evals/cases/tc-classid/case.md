@@ -35,6 +35,6 @@ Check each kernel claim in the doc comment and the commit message against the fa
 
 ## Results
 
-I ran Sonnet 5.5 on this task by hand, with and without the sentence. The README summarizes what it got wrong.
+I ran Sonnet 5.5 on this task by hand, with and without the sentence. The outcome isn't recorded here.
 
 Not tested: there's no test code for this case, so none of the facts has been run on a kernel.

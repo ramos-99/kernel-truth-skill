@@ -15,11 +15,7 @@ Start with these:
 - iter_task_threads(task): the threads of one task, e.g. iter_task_threads(curtask)
 - iter_task_vma(task[, addr]): the VMAs of a task, yielding struct vm_area_struct
 
-The loop variable should be the kernel struct pointer, so $t->pid or $v->vm_start just work. These loops should behave like the other for loops: break, continue and return work, they can be nested in a range loop or in each other, and scripts like this one should load and print a count:
-
-    begin { $n = 0; for ($t : iter_threads()) { $n++; } if ($n > 1) { print($n); } }
-
-Give a clear error when the kernel doesn't support them. Add parser, semantic and runtime tests, and update the docs and changelog. Don't use sudo.
+The loop variable should be the kernel struct pointer, so $t->pid or $v->vm_start just work. They should work like the other for loops do. Give a clear error when the kernel doesn't support them. Add parser, semantic and runtime tests, and update the docs and changelog. Don't use sudo on this machine.
 ```
 
 Run in a clone of bpftrace at `3f97ba560b5a4f324cda1d519f311daf843baa96`, the commit before the PR.
@@ -52,10 +48,39 @@ Accepted kernels: v6.6, v6.7, v6.11 to v6.13, v6.15 to v6.19, v7.0 to v7.3 and A
 
 `grade/selftest.sh <bpftrace checkout> <build dir>` grades the merged PR, its parent and the patches in `grade/variants/` on v7.3 and v6.12 (v6.6 for `v8-nofeaturecheck`).
 
+### Claim audit
+
+The procedure is in the [README](../../../README.md#claim-audit).
+
+| Run | Claims | Right | Too broad | Wrong | Unverified |
+|---|---|---|---|---|---|
+| As is | 38 | 30 | 6 | 0 | 2 |
+| With the sentence | 38 | 26 | 7 | 1 | 4 |
+
+Too broad in both runs:
+
+- The task of an outer iterator can be passed to `iter_task_vma`. Rejected on v6.7 to v6.11 (fact 5).
+- A failed VMA lookup means a contended mmap lock. From v7.1 the iterator takes per-VMA locks (bee9ef4a40a2).
+- `_new`, `_next` and `_destroy` must be called from one frame. The state has to be on the stack, but a subprogram can advance it (`iter_pass_iter_ptr_to_subprog` in the selftests, v6.7).
+- The kfuncs being in BTF means the iterator works. From v7.1 `bpf_iter_task_vma_new()` returns `-EOPNOTSUPP` without `CONFIG_PER_VMA_LOCK`.
+
+As is, also too broad: `iter_task_threads(curtask)` yields every thread of the process. From v6.8 (5a34f9dabd9a) it skips the threads before a non-leader.
+
+With the sentence:
+
+- Wrong: kfuncs are resolved against the BTF of the machine compiling the program. They're `.ksyms` externs, which libbpf resolves at load.
+- Too broad: the v6.8 thread order is documented for 6.7 too, where `next_thread()` wraps around.
+- Too broad: address 0 visits all VMAs. From v7.1 a VMA whose lock can't be taken is skipped.
+- Too broad: `task` must be a trusted pointer. `bpf_iter_task_vma_new()` also takes RCU pointers.
+
+The unverified claims need a run: convergence, a few probe contexts and address layouts outside x86_64.
+
 ## Results
 
-Selftest: the merge (`4552f27b`) passes on every accepted kernel and is ENV on Ubuntu 6.8.0-149. The base (`3f97ba56`) fails every iterator script. All ten variants fail except `v3-noalign`: LLVM already aligns the iterator state, so dropping the forced alignment can't be caught. The other nine cover swapped task flags, loop variables left on the stack, destroy only after a successful new, `addr` ignored, wrong `iter_task_threads` walks, no feature check, state in a scratch map and a hang.
+Sonnet 5.5 at medium effort, one fresh headless session per run with Write/Edit allowed, isolated from this repo. Capped at 6 cores and 8 GB. The run with the sentence was graded on a copy with the pinned libbpf, because it had built libbpf outside the repo.
 
-No model runs yet.
+Both runs PASS on v6.6 and FAIL on v6.7 (`prompt`, `loop_local`, `vma_addr`) and on v6.12, v6.18, v7.0 and v7.3 (the same three and `nested_iter`). For `prompt` the verifier says "BPF program is too large. Processed 1000001 insn" in both, on v6.12 and v7.3 (fact 8). The other three scripts were checked only by error code. Neither run loaded its code, though QEMU and `/dev/kvm` were available.
+
+The merge (`4552f27b`) passes on every accepted kernel and is ENV on Ubuntu 6.8.0-149. The base (`3f97ba56`) fails every iterator script. Nine of the ten variants fail: swapped task flags, loop variables left on the stack, destroy only after a successful new, `addr` ignored, wrong `iter_task_threads` walks, no feature check, state in a scratch map and a hang. `v3-noalign` passes, because LLVM already aligns the iterator state.
 
 Not tested: stable kernels with f597664454bd backported, kprobes with interrupts off on v7.1 and later (only the `sched_switch` tracepoint is checked), `PREEMPT_RT`, and whether the v6.7 and v6.11 load failure is "R2 must be a rcu pointer" in bpftrace's own output.
